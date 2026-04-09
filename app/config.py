@@ -282,6 +282,7 @@ class Settings:
     app_db: Path
     auth_state_file: Path
     session_cookie: str
+    session_cookie_secure: bool | None
     login_username: str
     login_password: str
     default_allowed_root: str
@@ -328,6 +329,7 @@ class Settings:
             app_db=Path(os.getenv("CODEXAPP_DB_PATH", str(app_support_dir / "app.db"))).expanduser(),
             auth_state_file=auth_state_file,
             session_cookie="codexapp_session",
+            session_cookie_secure=coerce_bool(os.getenv("CODEXAPP_SESSION_COOKIE_SECURE")),
             login_username=os.getenv("CODEXAPP_USERNAME", "admin"),
             login_password=os.getenv("CODEXAPP_PASSWORD", "codexapp-demo"),
             default_allowed_root=os.getenv("CODEXAPP_ALLOWED_ROOT", str(home / "codex")),

@@ -61,18 +61,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return api_ok({"status": "ok"})
 
     @app.post("/api/auth/login")
-    async def login(payload: dict[str, Any], response: Response) -> dict[str, Any]:
+    async def login(payload: dict[str, Any], request: Request, response: Response) -> dict[str, Any]:
         username = str(payload.get("username") or "").strip()
         password = str(payload.get("password") or "")
         if username != app_settings.login_username or not store.verify_login_password(password):
             raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Authentication required"})
         token = store.create_auth_session()
+        secure_cookie = app_settings.session_cookie_secure
+        if secure_cookie is None:
+            secure_cookie = request.url.scheme == "https"
         response.set_cookie(
             key=app_settings.session_cookie,
             value=token,
             httponly=True,
             samesite="lax",
-            secure=False,
+            secure=secure_cookie,
             max_age=60 * 60 * 8,
         )
         return api_ok({"user": store.user})

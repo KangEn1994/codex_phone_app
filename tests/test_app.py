@@ -194,6 +194,7 @@ class AppTests(unittest.TestCase):
             app_db=support_dir / "app.db",
             auth_state_file=codex_dir / "codexapp_auth.json",
             session_cookie="codexapp_session",
+            session_cookie_secure=None,
             login_username="admin",
             login_password="codexapp-demo",
             default_allowed_root=str(self.base / "workspaces"),
@@ -272,6 +273,29 @@ class AppTests(unittest.TestCase):
 
             messages = (await self.async_request("GET", f"/api/sessions/{session_id}/messages", cookies=cookies)).json()["data"]["items"]
             self.assertEqual(messages[-1]["text"], "resumed: second prompt")
+
+        asyncio.run(scenario())
+
+    def test_create_session_creates_missing_workspace_directory(self) -> None:
+        async def scenario() -> None:
+            cookies = self.auth_cookies()
+            nested_cwd = Path(self.settings.default_allowed_root) / "proj" / "feature" / "draft"
+            self.assertFalse(nested_cwd.exists())
+
+            response = await self.async_request(
+                "POST",
+                "/api/sessions",
+                json_body={
+                    "cwd": str(nested_cwd),
+                    "prompt": "create nested workspace",
+                },
+                cookies=cookies,
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(nested_cwd.is_dir())
+            session = response.json()["data"]["session"]
+            self.assertEqual(session["cwd"], str(nested_cwd))
+            await self.wait_for_terminal_run(session["id"], cookies, "completed")
 
         asyncio.run(scenario())
 

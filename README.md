@@ -44,6 +44,7 @@ pip install -r requirements.txt
 - `CODEXAPP_SUPPORT_DIR`: 指定应用状态目录，默认 `<repo>/.codexapp`
 - `CODEXAPP_DB_PATH`: 指定应用 SQLite 数据库路径
 - `CODEXAPP_AUTH_STATE_FILE`: 指定登录密码状态文件路径
+- `CODEXAPP_SESSION_COOKIE_SECURE`: 是否强制将登录 Cookie 标记为 `Secure`，未设置时会根据请求是否为 HTTPS 自动判断
 - `CODEXAPP_USERNAME`: 登录用户名，默认 `admin`
 - `CODEXAPP_PASSWORD`: 初始登录密码，默认 `codexapp-demo`
 - `CODEXAPP_ALLOWED_ROOT`: 允许浏览和启动会话的工作区根目录，默认 `~/codex`

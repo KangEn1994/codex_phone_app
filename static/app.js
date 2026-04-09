@@ -1,4 +1,5 @@
 const state = {
+  runtime: detectRuntime(),
   booting: true,
   user: null,
   loginError: "",
@@ -36,6 +37,114 @@ const state = {
   shouldScrollSessionBottom: false,
   openSessionMenuId: null,
 };
+
+function detectRuntime() {
+  const params = new URLSearchParams(window.location.search);
+  const userAgent = navigator.userAgent || "";
+  const mobileClient = params.get("client");
+  const isMobileShell = /\bCodexAppMobile\b/i.test(userAgent) || mobileClient === "mobile";
+  let platform = "";
+  if (/android/i.test(userAgent)) {
+    platform = "android";
+  } else if (/\b(iPhone|iPad|iPod)\b/i.test(userAgent) || /\bios\b/i.test(userAgent)) {
+    platform = "ios";
+  } else if (isMobileShell) {
+    platform = "mobile";
+  }
+  return {
+    isMobileShell,
+    platform,
+  };
+}
+
+function isMobileShellClient() {
+  return Boolean(state.runtime?.isMobileShell);
+}
+
+function syncRuntimeDecorations() {
+  document.body.classList.toggle("mobile-shell", isMobileShellClient());
+  document.body.dataset.client = isMobileShellClient() ? "mobile-shell" : "web";
+  if (state.runtime?.platform) {
+    document.body.dataset.platform = state.runtime.platform;
+  } else {
+    delete document.body.dataset.platform;
+  }
+}
+
+function renderTerminalAction(session) {
+  if (isMobileShellClient()) {
+    return "";
+  }
+  return `<button class="ghost-button small-button" data-action="open-terminal" data-session-id="${escapeHtml(session.id)}" ${session.codex_thread_id ? "" : "disabled"}>终端打开</button>`;
+}
+
+function renderTerminalSettingsSummary() {
+  if (isMobileShellClient()) {
+    return "";
+  }
+  return `
+        <article class="status-card">
+          <span>终端软件</span>
+          <strong>${escapeHtml(terminalAppLabel(state.system?.settings?.terminal_app || state.system?.default_terminal_app || "terminal"))}</strong>
+        </article>
+  `;
+}
+
+function renderTerminalSettingsField() {
+  if (isMobileShellClient()) {
+    return "";
+  }
+  return `
+          <label>
+            <span>终端软件</span>
+            <select name="terminal_app">
+              ${(state.system?.terminal_apps || ["terminal", "iterm"])
+                .map(
+                  (value) =>
+                    `<option value="${escapeHtml(value)}" ${state.settingsTerminalApp === value ? "selected" : ""}>${escapeHtml(terminalAppLabel(value))}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+  `;
+}
+
+function renderNewSessionWorkspaceField() {
+  if (!isMobileShellClient() || !state.workspaces.length) {
+    return `
+          <label>
+            <span>项目文件夹</span>
+            <input name="cwd" value="${escapeHtml(state.newSessionCwd)}" placeholder="/Users/you/codex/project" />
+          </label>
+    `;
+  }
+
+  const normalizedCwd = normalizePath(state.newSessionCwd);
+  const hasCurrentOption = state.workspaces.some((workspace) => normalizePath(workspace.path) === normalizedCwd);
+  const options = hasCurrentOption
+    ? state.workspaces
+    : [
+        ...state.workspaces,
+        {
+          name: basename(state.newSessionCwd) || "当前路径",
+          path: state.newSessionCwd,
+        },
+      ];
+
+  return `
+          <label>
+            <span>项目文件夹</span>
+            <select name="cwd">
+              ${options
+                .map(
+                  (workspace) =>
+                    `<option value="${escapeHtml(workspace.path)}" ${normalizePath(workspace.path) === normalizedCwd ? "selected" : ""}>${escapeHtml(workspace.name)} · ${escapeHtml(workspace.path)}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+  `;
+}
 
 function selectedSession() {
   return state.sessions.find((item) => item.id === state.selectedSessionId) || null;
@@ -417,13 +526,16 @@ function renderLogin() {
 
 function renderSidebar() {
   const groups = visibleWorkspaceGroups();
+  const sidebarSummary = isMobileShellClient()
+    ? "项目下展示受管会话，移动端继续复用同一套后端会话。"
+    : "项目下展示受管会话，每张卡片都可以直接继续或在终端打开。";
   return `
     <aside class="sidebar shell-panel ${state.mobileTab === "projects" ? "mobile-visible" : ""}">
       <div class="panel-headline sidebar-head">
         <div>
           <p class="eyebrow">Projects</p>
           <h2>项目列表</h2>
-          <p class="subtle">项目下展示受管会话，每张卡片都可以直接继续或在终端打开。</p>
+          <p class="subtle">${escapeHtml(sidebarSummary)}</p>
         </div>
         <button class="ghost-button small-button" data-action="focus-new-session">新会话</button>
       </div>
@@ -432,13 +544,10 @@ function renderSidebar() {
         <div class="card-head">
           <p class="eyebrow">New Session</p>
           <h3>在项目列表里新建</h3>
-          <p class="subtle">这里负责选择项目文件夹并输入首条 prompt。</p>
+          <p class="subtle">${isMobileShellClient() ? "先选择项目，再输入首条 prompt。" : "这里负责选择项目文件夹并输入首条 prompt。"}</p>
         </div>
         <form id="new-session-form" class="composer-form">
-          <label>
-            <span>项目文件夹</span>
-            <input name="cwd" value="${escapeHtml(state.newSessionCwd)}" placeholder="/Users/you/codex/project" />
-          </label>
+          ${renderNewSessionWorkspaceField()}
           <label>
             <span>首条 prompt</span>
             <textarea name="prompt" placeholder="输入第一条消息，创建新的执行会话">${escapeHtml(state.newSessionPrompt)}</textarea>
@@ -501,7 +610,7 @@ function renderSidebar() {
                                   </div>
                                   <div class="thread-card-menu ${state.openSessionMenuId === session.id ? "" : "collapsed"}">
                                     <button class="ghost-button small-button" data-action="continue-session" data-session-id="${escapeHtml(session.id)}">继续会话</button>
-                                    <button class="ghost-button small-button" data-action="open-terminal" data-session-id="${escapeHtml(session.id)}" ${session.codex_thread_id ? "" : "disabled"}>终端打开</button>
+                                    ${renderTerminalAction(session)}
                                     <button class="ghost-button small-button" data-action="rename-session" data-session-id="${escapeHtml(session.id)}">改名</button>
                                     <button class="ghost-button small-button" data-action="move-session-up" data-session-id="${escapeHtml(session.id)}" data-workspace-path="${escapeHtml(group.workspace.path)}" ${group.sessions[0]?.id === session.id ? "disabled" : ""}>上移</button>
                                     <button class="ghost-button small-button" data-action="move-session-down" data-session-id="${escapeHtml(session.id)}" data-workspace-path="${escapeHtml(group.workspace.path)}" ${group.sessions[group.sessions.length - 1]?.id === session.id ? "disabled" : ""}>下移</button>
@@ -625,7 +734,7 @@ function renderCurrentSessionPane() {
             ? `
               <div class="topbar-actions">
                 <button class="ghost-button small-button" data-action="rename-session" data-session-id="${escapeHtml(session.id)}">改名</button>
-                <button class="ghost-button small-button" data-action="open-terminal" data-session-id="${escapeHtml(session.id)}" ${session.codex_thread_id ? "" : "disabled"}>终端打开</button>
+                ${renderTerminalAction(session)}
                 <button class="ghost-button small-button danger-button" data-action="delete-session" data-session-id="${escapeHtml(session.id)}" ${session.busy ? "disabled" : ""}>删除</button>
                 ${showSessionStatus ? statusBadge(status) : ""}
               </div>
@@ -676,10 +785,7 @@ function renderSettingsPane() {
           <span>思考强度</span>
           <strong>${escapeHtml(reasoningEffortLabel(state.system?.settings?.reasoning_effort || state.system?.default_reasoning_effort || "medium"))}</strong>
         </article>
-        <article class="status-card">
-          <span>终端软件</span>
-          <strong>${escapeHtml(terminalAppLabel(state.system?.settings?.terminal_app || state.system?.default_terminal_app || "terminal"))}</strong>
-        </article>
+        ${renderTerminalSettingsSummary()}
         <article class="status-card">
           <span>默认执行权限</span>
           <strong>${escapeHtml(sandboxModeLabel(state.system?.settings?.sandbox_mode || state.system?.default_sandbox_mode || "workspace-write"))}</strong>
@@ -701,7 +807,7 @@ function renderSettingsPane() {
       <section class="composer-card settings-card shell-subpanel">
         <div class="card-head">
           <p class="eyebrow">Execution</p>
-          <h3>默认模型、终端与执行权限</h3>
+          <h3>${isMobileShellClient() ? "默认模型与执行权限" : "默认模型、终端与执行权限"}</h3>
         </div>
         <form id="settings-form" class="composer-form">
           <label>
@@ -719,17 +825,7 @@ function renderSettingsPane() {
                 .join("")}
             </div>
           </div>
-          <label>
-            <span>终端软件</span>
-            <select name="terminal_app">
-              ${(state.system?.terminal_apps || ["terminal", "iterm"])
-                .map(
-                  (value) =>
-                    `<option value="${escapeHtml(value)}" ${state.settingsTerminalApp === value ? "selected" : ""}>${escapeHtml(terminalAppLabel(value))}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
+          ${renderTerminalSettingsField()}
           <label>
             <span>Sandbox 权限</span>
             <select name="sandbox_mode">
@@ -755,7 +851,11 @@ function renderSettingsPane() {
           <label class="toggle-field">
             <div class="toggle-copy">
               <span>允许 Git 写操作提权</span>
-              <p class="subtle">命中 git add、git commit、分支改写等请求时，自动切换到下面这组权限；“终端打开”也会使用它。</p>
+              <p class="subtle">${
+                isMobileShellClient()
+                  ? "命中 git add、git commit、分支改写等请求时，自动切换到下面这组权限。"
+                  : "命中 git add、git commit、分支改写等请求时，自动切换到下面这组权限；“终端打开”也会使用它。"
+              }</p>
             </div>
             <input name="git_write_enabled" type="checkbox" ${state.settingsGitWriteEnabled ? "checked" : ""} />
           </label>
@@ -783,7 +883,11 @@ function renderSettingsPane() {
               </select>
             </label>
           </div>
-          <p class="subtle">这些设置只作用于 CodexApp 的 Web 执行与“终端打开”入口，不会再改你的主 Codex 配置文件。</p>
+          <p class="subtle">${
+            isMobileShellClient()
+              ? "这些设置只作用于 CodexApp 的 Web 执行入口，不会再改你的主 Codex 配置文件。"
+              : "这些设置只作用于 CodexApp 的 Web 执行与“终端打开”入口，不会再改你的主 Codex 配置文件。"
+          }</p>
           <div class="composer-actions">
             <button class="primary-button" type="submit" ${state.settingsSaving ? "disabled" : ""}>${state.settingsSaving ? "保存中..." : "保存设置"}</button>
           </div>
@@ -1230,6 +1334,7 @@ function renderApp() {
 }
 
 function render() {
+  syncRuntimeDecorations();
   if (state.booting) {
     document.getElementById("app").innerHTML = `<main class="screen loading-screen"><div class="loading-card">Loading Codex console…</div></main>`;
     return;
