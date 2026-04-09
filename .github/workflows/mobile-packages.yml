@@ -32,9 +32,12 @@ jobs:
       run:
         working-directory: mobile/android-shell
     env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+      FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -47,9 +50,9 @@ jobs:
           cache: gradle
 
       - name: Prepare Android signing keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > release.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > release.keystore
           echo "ANDROID_KEYSTORE_PATH=$PWD/release.keystore" >> "$GITHUB_ENV"
 
       - name: Build Android debug APK
@@ -79,11 +82,9 @@ jobs:
           retention-days: 14
 
       - name: Send Feishu card notification
-        if: ${{ always() && github.event_name != 'pull_request' && secrets.FEISHU_WEBHOOK_URL != '' }}
+        if: ${{ always() && github.event_name != 'pull_request' && env.FEISHU_WEBHOOK_URL != '' }}
         continue-on-error: true
         env:
-          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
-          FEISHU_WEBHOOK_SECRET: ${{ secrets.FEISHU_WEBHOOK_SECRET }}
           JOB_STATUS: ${{ job.status }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
