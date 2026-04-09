@@ -49,6 +49,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def require_user(session_token: str | None) -> dict[str, Any]:
         return store.current_user(session_token)
 
+    def enrich_session(session: dict[str, Any]) -> dict[str, Any]:
+        branch_name = repository.git_branch(session.get("cwd") or "")
+        return {**session, "branch_name": branch_name}
+
+    def enrich_sessions(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [enrich_session(item) for item in items]
+
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(
@@ -164,7 +171,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sessions")
     async def sessions(session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
-        return api_ok({"items": store.list_sessions()})
+        return api_ok({"items": enrich_sessions(store.list_sessions())})
 
     @app.post("/api/sessions/reorder")
     async def reorder_sessions(payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
@@ -173,7 +180,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not isinstance(session_ids, list):
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "session_ids must be an array"})
         updated = store.reorder_sessions(session_ids)
-        return api_ok({"items": updated, "sessions": store.list_sessions()})
+        return api_ok({"items": enrich_sessions(updated), "sessions": enrich_sessions(store.list_sessions())})
 
     @app.post("/api/sessions")
     async def create_session(payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
@@ -184,12 +191,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not cwd:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "cwd is required"})
         session, run = await runner.start_session(cwd=cwd, model=model, prompt=prompt)
-        return api_ok({"session": session, "run": run})
+        return api_ok({"session": enrich_session(session), "run": run})
 
     @app.get("/api/sessions/{session_id}")
     async def get_session(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
-        return api_ok({"session": store.get_session(session_id)})
+        return api_ok({"session": enrich_session(store.get_session(session_id))})
 
     @app.patch("/api/sessions/{session_id}")
     async def update_session(session_id: str, payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
@@ -200,13 +207,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if len(title) > 120:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title is too long"})
         session = store.update_session_title(session_id, title)
-        return api_ok({"session": session})
+        return api_ok({"session": enrich_session(session)})
 
     @app.delete("/api/sessions/{session_id}")
     async def delete_session(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
         store.delete_session(session_id)
-        return api_ok({"deleted": True, "session_id": session_id, "sessions": store.list_sessions()})
+        return api_ok({"deleted": True, "session_id": session_id, "sessions": enrich_sessions(store.list_sessions())})
 
     @app.get("/api/sessions/{session_id}/messages")
     async def get_session_messages(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
@@ -225,7 +232,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         require_user(session_token)
         prompt = str(payload.get("prompt") or "").strip()
         session, run = await runner.resume_session(session_id=session_id, prompt=prompt)
-        return api_ok({"session": session, "run": run})
+        return api_ok({"session": enrich_session(session), "run": run})
 
     @app.post("/api/runs/{run_id}/cancel")
     async def cancel_run(run_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:

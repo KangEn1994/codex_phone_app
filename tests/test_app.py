@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import stat
+import subprocess
 import tempfile
 import textwrap
 import unittest
@@ -666,6 +667,20 @@ class AppTests(unittest.TestCase):
             self.assertIn(snapshot["events"][0]["event_type"], {"cli_log", "thread.started"})
 
         asyncio.run(scenario())
+
+    def test_get_session_includes_current_branch(self) -> None:
+        workspace = Path(self.settings.default_allowed_root) / "proj"
+        subprocess.run(["git", "init"], cwd=workspace, check=True, capture_output=True)
+        subprocess.run(["git", "checkout", "-b", "feature-branch-test"], cwd=workspace, check=True, capture_output=True)
+
+        session = self.app.state.store.create_session(
+            cwd=str(workspace),
+            model="gpt-5.4",
+            title="branch session",
+        )
+        response = self.client.get(f"/api/sessions/{session['id']}", cookies=self.auth_cookies())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["data"]["session"]["branch_name"], "feature-branch-test")
 
 
 if __name__ == "__main__":

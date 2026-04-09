@@ -113,7 +113,7 @@ GitHub Actions 工作流默认行为：
 
 Docker Hub 配置方式：
 
-- 在 GitHub 仓库的 Variables 里新增 `DOCKERHUB_IMAGE_NAME`，值例如 `yourname/codexapp`
+- 在 GitHub 仓库的 Variables 里新增 `DOCKERHUB_IMAGE_NAME`，值可以是 `yourname/codexapp`，也可以是完整的 `docker.io/yourname/codexapp`
 - 在 GitHub 仓库的 Secrets 里新增 `DOCKERHUB_USERNAME`
 - 在 GitHub 仓库的 Secrets 里新增 `DOCKERHUB_TOKEN`
 - `DOCKERHUB_TOKEN` 推荐使用 Docker Hub Access Token；如果你必须使用密码，也应放在这个 Secret 里

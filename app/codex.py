@@ -357,6 +357,24 @@ class CodexRepository:
             return None
         return None
 
+    def git_branch(self, cwd: str) -> str:
+        path = str(cwd or "").strip()
+        if not path:
+            return ""
+        try:
+            result = subprocess.run(
+                ["git", "-C", path, "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        if result.returncode != 0:
+            return ""
+        return str(result.stdout or "").strip()
+
     def get_messages(self, thread_id: str) -> list[dict[str, Any]]:
         rollout_path = self.find_rollout_path(thread_id)
         if rollout_path is None or not rollout_path.exists():
@@ -547,6 +565,15 @@ class CodexCliRunner:
             self._subscribers.pop(session_id, None)
 
     async def _broadcast(self, session_id: str, event: str, data: dict[str, Any]) -> None:
+        if "session" in data and isinstance(data["session"], dict):
+            session = data["session"]
+            data = {
+                **data,
+                "session": {
+                    **session,
+                    "branch_name": self.repository.git_branch(session.get("cwd") or ""),
+                },
+            }
         payload = {"event": event, "data": data}
         stale: list[asyncio.Queue[dict[str, Any]]] = []
         for queue in self._subscribers.get(session_id, set()):
@@ -558,7 +585,14 @@ class CodexCliRunner:
             self.unsubscribe(session_id, queue)
 
     def session_snapshot(self, session_id: str) -> dict[str, Any]:
-        return self.store.session_snapshot(session_id)
+        snapshot = self.store.session_snapshot(session_id)
+        session = snapshot.get("session")
+        if isinstance(session, dict):
+            snapshot["session"] = {
+                **session,
+                "branch_name": self.repository.git_branch(session.get("cwd") or ""),
+            }
+        return snapshot
 
     def _load_shell_environment(self) -> dict[str, str]:
         if self._shell_env_cache is not None:

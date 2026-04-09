@@ -77,7 +77,16 @@ jobs:
         run: |
           images="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           if [ -n "${{ env.DOCKERHUB_IMAGE_NAME }}" ]; then
-            images="${images}"$'\n'"${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}"
+            dockerhub_image="${{ env.DOCKERHUB_IMAGE_NAME }}"
+            case "$dockerhub_image" in
+              docker.io/*|index.docker.io/*)
+                dockerhub_ref="$dockerhub_image"
+                ;;
+              *)
+                dockerhub_ref="${{ env.DOCKERHUB_REGISTRY }}/$dockerhub_image"
+                ;;
+            esac
+            images="${images}"$'\n'"$dockerhub_ref"
           fi
           {
             echo 'images<<EOF'

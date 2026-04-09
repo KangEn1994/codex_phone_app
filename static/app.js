@@ -275,6 +275,36 @@ function truncateText(value, limit = 140) {
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function hasMessage(role, text, items = state.messages) {
+  const targetRole = String(role || "").trim();
+  const targetText = String(text || "").trim();
+  if (!targetRole || !targetText) {
+    return false;
+  }
+  return (items || []).some((message) => String(message.role || "").trim() === targetRole && String(message.text || "").trim() === targetText);
+}
+
+function ensureOptimisticFinalMessage(run) {
+  if (!run?.final_message || hasMessage("assistant", run.final_message)) {
+    return;
+  }
+  state.messages = [
+    ...state.messages,
+    {
+      id: `optimistic_${run.id}`,
+      role: "assistant",
+      type: "message",
+      text: run.final_message,
+      kind: "summary",
+      created_at: run.completed_at || new Date().toISOString(),
+    },
+  ];
+}
+
 function workspaceForCwd(cwd) {
   const current = normalizePath(cwd);
   let bestMatch = null;
@@ -719,13 +749,16 @@ function renderCurrentSessionPane() {
   const session = selectedSession();
   const status = session?.status;
   const showSessionStatus = status && status !== "ready";
+  const projectMeta = session
+    ? [basename(session.cwd), session.model, session.branch_name ? `分支 ${session.branch_name}` : ""].filter(Boolean).join(" · ")
+    : "选择左侧会话，或者先到项目列表里新建一个";
   return `
     <section class="content shell-panel ${state.mobileTab === "session" ? "mobile-visible" : ""}">
       <header class="topbar panel-headline">
         <div>
           <p class="eyebrow">Current Session</p>
           <h1>${escapeHtml(session?.title || "当前会话")}</h1>
-          <p class="subtle">${escapeHtml(session ? `${basename(session.cwd)} · ${session.model}` : "选择左侧会话，或者先到项目列表里新建一个")}</p>
+          <p class="subtle">${escapeHtml(projectMeta)}</p>
           ${session ? `<p class="current-path">${escapeHtml(session.cwd)}</p>` : ""}
           ${session ? `<p class="session-id-row">会话 ID: <code>${escapeHtml(session.codex_thread_id || session.id)}</code></p>` : ""}
         </div>
@@ -1394,10 +1427,41 @@ async function syncSelectionAfterSessionsRefresh(preferredSessionId = null) {
   }
 }
 
-async function refreshSessionState(sessionId) {
-  const [messagesData, runsData] = await Promise.all([api(`/api/sessions/${sessionId}/messages`), api(`/api/sessions/${sessionId}/runs`)]);
-  state.messages = messagesData.items;
-  state.runs = runsData.items;
+async function refreshSessionState(sessionId, options = {}) {
+  const attempts = Math.max(1, Number(options.attempts || 1));
+  const retryDelayMs = Math.max(0, Number(options.retryDelayMs || 250));
+  const expectedAssistantText = String(options.expectedAssistantText || "").trim();
+  let sessionData = null;
+  let messagesData = null;
+  let runsData = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    [sessionData, messagesData, runsData] = await Promise.all([
+      api(`/api/sessions/${sessionId}`),
+      api(`/api/sessions/${sessionId}/messages`),
+      api(`/api/sessions/${sessionId}/runs`),
+    ]);
+    if (!expectedAssistantText || hasMessage("assistant", expectedAssistantText, messagesData.items)) {
+      break;
+    }
+    if (attempt < attempts - 1) {
+      await sleep(retryDelayMs);
+    }
+  }
+
+  if (sessionData?.session) {
+    const index = state.sessions.findIndex((item) => item.id === sessionData.session.id);
+    if (index >= 0) {
+      state.sessions[index] = sessionData.session;
+    } else {
+      state.sessions.unshift(sessionData.session);
+    }
+  }
+  state.messages = messagesData?.items || [];
+  state.runs = runsData?.items || [];
+  if (options.finalRun) {
+    ensureOptimisticFinalMessage(options.finalRun);
+  }
 }
 
 function bindWebSocket(sessionId) {
@@ -1453,8 +1517,13 @@ function bindWebSocket(sessionId) {
           state.runs.unshift(incomingRun);
         }
       }
-      if (payload.event !== "run.queued" && state.selectedSessionId) {
-        await refreshSessionState(state.selectedSessionId);
+      if (payload.event !== "run.queued" && state.selectedSessionId && incomingSession?.id === state.selectedSessionId) {
+        await refreshSessionState(state.selectedSessionId, {
+          attempts: payload.event === "run.completed" ? 5 : 1,
+          retryDelayMs: 300,
+          expectedAssistantText: incomingRun?.final_message || "",
+          finalRun: incomingRun,
+        });
       }
       render();
     }
