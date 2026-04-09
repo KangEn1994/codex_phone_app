@@ -1,0 +1,29 @@
+services:
+  codexapp:
+    image: ${CODEXAPP_IMAGE_NAME:-codexapp:latest}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      HOME: /root
+      CODEXAPP_HOST: 0.0.0.0
+      CODEXAPP_PORT: 8000
+      CODEXAPP_USERNAME: ${CODEXAPP_USERNAME:-admin}
+      CODEXAPP_PASSWORD: ${CODEXAPP_PASSWORD:-codexapp-demo}
+      CODEXAPP_CODEX_DIR: /root/.codex
+      CODEXAPP_SUPPORT_DIR: /data/codexapp
+      CODEXAPP_ALLOWED_ROOT: /workspace
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    ports:
+      - "${HOST_HTTP_PORT:-8000}:8000"
+    volumes:
+      - codex_state:/root/.codex
+      - codexapp_state:/data/codexapp
+      - ${HOST_WORKSPACE_ROOT:-..}:/workspace
+
+volumes:
+  codex_state:
+  codexapp_state:
+

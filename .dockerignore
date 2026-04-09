@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.codexapp
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.uvicorn.log
+.uvicorn.pid
+tests
+stack/.env
+
