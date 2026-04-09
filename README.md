@@ -135,6 +135,38 @@ docker compose up -d
 
 这意味着容器重启后，已完成的历史会话仍然可见；但正在执行中的任务进程会中断，应用重新启动后会把它们标记为失败。
 
+## 安卓打包 CI
+
+仓库里已经补充了 Android 壳应用打包工作流：
+
+- [.github/workflows/mobile-packages.yml](/Users/kang_en/codex/codexapp/.github/workflows/mobile-packages.yml): 构建 Android 安装包产物
+- [mobile/android-shell](/Users/kang_en/codex/codexapp/mobile/android-shell): Android 原生壳工程
+
+工作流默认行为：
+
+- 会产出 `debug APK`
+- 会额外构建 `release APK` 与 `AAB`
+- 适合先拿 `debug APK` 做本地安装测试
+
+Android 可选签名 Secrets：
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+飞书通知可选 Secrets：
+
+- `FEISHU_WEBHOOK_URL`: 飞书自定义机器人 webhook 地址
+- `FEISHU_WEBHOOK_SECRET`: 如果机器人开启了签名校验，再额外配置这个 secret；未开启可不填
+
+说明：
+
+- 当前仓库还没有正式商店发布配置，所以这个 CI 更偏向“持续产出可验证安装包”
+- 如果不配置签名参数，最适合直接拿 `debug APK` 本地安装测试
+- Android 壳应用现在支持在应用内输入并保存远程 CodexApp 地址，不需要再把服务地址写死在代码里
+- 如果配置了 `FEISHU_WEBHOOK_URL`，Android 打包 job 结束后会发送一张飞书卡片，包含构建状态、分支、触发人、运行链接和提交链接
+
 ## 测试
 
 运行测试：

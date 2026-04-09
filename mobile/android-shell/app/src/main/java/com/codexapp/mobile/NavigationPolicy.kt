@@ -9,7 +9,7 @@ enum class NavigationDecision {
 }
 
 object NavigationPolicy {
-    fun evaluate(uri: Uri?): NavigationDecision {
+    fun evaluate(uri: Uri?, baseUri: Uri?): NavigationDecision {
         if (uri == null) {
             return NavigationDecision.Blocked
         }
@@ -23,7 +23,7 @@ object NavigationPolicy {
         if (scheme !in ShellConfig.allowedSchemes) {
             return NavigationDecision.Blocked
         }
-        if (host in ShellConfig.allowedHosts) {
+        if (host in ShellConfig.allowedHosts(baseUri)) {
             return NavigationDecision.InApp
         }
         if (host in ShellConfig.externalHosts) {

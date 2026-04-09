@@ -4,4 +4,12 @@
     <string name="error_title">页面暂时无法打开</string>
     <string name="error_message_default">请检查网络或服务状态后重试。</string>
     <string name="retry">重试</string>
+    <string name="edit_server">服务器地址</string>
+    <string name="change_server">更换地址</string>
+    <string name="server_config_title">连接远程 CodexApp</string>
+    <string name="server_config_description">输入要连接的服务地址，例如 https://your-host.example.com/ 或 http://192.168.1.10:8000/。</string>
+    <string name="server_url_hint">https://codexapp.example.com/</string>
+    <string name="connect">连接</string>
+    <string name="cancel">取消</string>
+    <string name="invalid_server_url">请输入有效的 http 或 https 地址。</string>
 </resources>
