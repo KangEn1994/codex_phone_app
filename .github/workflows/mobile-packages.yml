@@ -63,21 +63,30 @@ jobs:
       - name: Build Android release APK and AAB
         run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
 
+      - name: Prepare Android artifacts
+        run: |
+          mkdir -p build/ci-artifacts/debug build/ci-artifacts/release
+          cp app/build/outputs/apk/debug/*.apk build/ci-artifacts/debug/codexapp-android-debug.apk
+          cp app/build/outputs/apk/release/*.apk build/ci-artifacts/release/codexapp-android-release.apk
+          cp app/build/outputs/bundle/release/*.aab build/ci-artifacts/release/codexapp-android-release.aab
+
       - name: Upload Android debug APK
+        id: upload_debug_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
-          path: mobile/android-shell/app/build/outputs/apk/debug/*.apk
+          name: codexapp-android-debug-apk
+          path: mobile/android-shell/build/ci-artifacts/debug/codexapp-android-debug.apk
           if-no-files-found: error
           retention-days: 14
 
       - name: Upload Android release artifacts
+        id: upload_release_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-release-artifacts
+          name: codexapp-android-release-package
           path: |
-            mobile/android-shell/app/build/outputs/apk/release/*.apk
-            mobile/android-shell/app/build/outputs/bundle/release/*.aab
+            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release.apk
+            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release.aab
           if-no-files-found: error
           retention-days: 14
 
@@ -94,6 +103,8 @@ jobs:
           GITHUB_RUN_ID: ${{ github.run_id }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          DEBUG_ARTIFACT_URL: ${{ steps.upload_debug_artifact.outputs.artifact-url }}
+          RELEASE_ARTIFACT_URL: ${{ steps.upload_release_artifact.outputs.artifact-url }}
         run: |
           python3 - <<'PY' > feishu-payload.json
           import base64
@@ -126,6 +137,8 @@ jobs:
 
           run_url = f"{server_url}/{repo}/actions/runs/{run_id}"
           commit_url = f"{server_url}/{repo}/commit/{sha}"
+          debug_artifact_url = os.environ.get("DEBUG_ARTIFACT_URL", "").strip()
+          release_artifact_url = os.environ.get("RELEASE_ARTIFACT_URL", "").strip()
 
           payload = {
               "msg_type": "interactive",
@@ -179,14 +192,15 @@ jobs:
                           "tag": "div",
                           "text": {
                               "tag": "lark_md",
-                              "content": (
-                                  f"**运行号**\n#{run_number}\n\n"
-                                  f"**提交**\n`{sha[:7]}`\n\n"
-                                  "**产物**\n"
-                                  "`android-debug-apk`、`android-release-artifacts`"
-                              ),
+                                  "content": (
+                                      f"**运行号**\n#{run_number}\n\n"
+                                      f"**提交**\n`{sha[:7]}`\n\n"
+                                      "**产物**\n"
+                                      "`codexapp-android-debug-apk`、`codexapp-android-release-package`\n\n"
+                                      "下载链接需要登录 GitHub。"
+                                  ),
+                              },
                           },
-                      },
                       {
                           "tag": "action",
                           "actions": [
@@ -198,6 +212,22 @@ jobs:
                                       "content": "查看构建",
                                   },
                                   "url": run_url,
+                              },
+                              {
+                                  "tag": "button",
+                                  "text": {
+                                      "tag": "plain_text",
+                                      "content": "下载 Debug APK",
+                                  },
+                                  "url": debug_artifact_url or run_url,
+                              },
+                              {
+                                  "tag": "button",
+                                  "text": {
+                                      "tag": "plain_text",
+                                      "content": "下载 Release 包",
+                                  },
+                                  "url": release_artifact_url or run_url,
                               },
                               {
                                   "tag": "button",

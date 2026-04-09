@@ -144,9 +144,9 @@ docker compose up -d
 
 工作流默认行为：
 
-- 会产出 `debug APK`
-- 会额外构建 `release APK` 与 `AAB`
-- 适合先拿 `debug APK` 做本地安装测试
+- 会产出 `codexapp-android-debug-apk`
+- 会额外构建 `codexapp-android-release-package`
+- `codexapp-android-debug-apk` 内是 `codexapp-android-debug.apk`，最适合先做本地安装测试
 
 Android 可选签名 Secrets：
 
@@ -165,7 +165,7 @@ Android 可选签名 Secrets：
 - 当前仓库还没有正式商店发布配置，所以这个 CI 更偏向“持续产出可验证安装包”
 - 如果不配置签名参数，最适合直接拿 `debug APK` 本地安装测试
 - Android 壳应用现在支持在应用内输入并保存远程 CodexApp 地址，不需要再把服务地址写死在代码里
-- 如果配置了 `FEISHU_WEBHOOK_URL`，Android 打包 job 结束后会发送一张飞书卡片，包含构建状态、分支、触发人、运行链接和提交链接
+- 如果配置了 `FEISHU_WEBHOOK_URL`，Android 打包 job 结束后会发送一张飞书卡片，包含构建状态、分支、触发人、运行链接、提交链接，以及两个 artifact 下载按钮
 
 ## 测试
 
