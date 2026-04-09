@@ -1,16 +1,16 @@
-def hasAndroidSigning = [
-    "ANDROID_KEYSTORE_PATH",
-    "ANDROID_KEYSTORE_PASSWORD",
-    "ANDROID_KEY_ALIAS",
-    "ANDROID_KEY_PASSWORD",
-].every { key -> (System.getenv(key) ?: "").trim() }
-
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
 }
 
 android {
+    def hasAndroidSigning = [
+        "ANDROID_KEYSTORE_PATH",
+        "ANDROID_KEYSTORE_PASSWORD",
+        "ANDROID_KEY_ALIAS",
+        "ANDROID_KEY_PASSWORD",
+    ].every { key -> (System.getenv(key) ?: "").trim() }
+
     namespace 'com.codexapp.mobile'
     compileSdk 35
 
