@@ -359,6 +359,18 @@ class SessionStore:
             ).fetchone()
         return int(row["count"] if row else 0)
 
+    def list_active_runs(self) -> list[dict[str, Any]]:
+        with self._connection() as connection:
+            rows = connection.execute(
+                """
+                SELECT *
+                FROM session_runs
+                WHERE status IN ('queued', 'running')
+                ORDER BY created_at DESC, id DESC
+                """
+            ).fetchall()
+        return [self._row_to_run(row) for row in rows]
+
     def mark_run_started(self, run_id: str, pid: int) -> dict[str, Any]:
         started_at = now_iso()
         with self._connection() as connection:

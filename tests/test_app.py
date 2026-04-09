@@ -13,7 +13,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.codex import CliEventParser
-from app.config import Settings
+from app.config import Settings, is_git_write_request
 from app.main import create_app
 
 
@@ -58,6 +58,7 @@ def main():
         "-c", "--config",
         "-p", "--profile",
         "-o", "--output-last-message",
+        "--enable", "--disable",
     }
     flags = {
         "--json",
@@ -151,6 +152,14 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parser.state.final_message, "done")
         parser.parse_stdout_line('{"type":"turn.completed"}')
         self.assertTrue(parser.state.turn_completed)
+
+    def test_git_write_request_matches_keywords(self) -> None:
+        self.assertTrue(is_git_write_request("请帮我 git commit 当前改动"))
+        self.assertTrue(is_git_write_request("新建一个分支，并且创建一个1.txt文件，然后提交过去看看"))
+        self.assertTrue(is_git_write_request("先提交一下这批改动"))
+        self.assertTrue(is_git_write_request("帮我推送到远端"))
+        self.assertTrue(is_git_write_request("看看这个分支怎么处理"))
+        self.assertFalse(is_git_write_request("只看一下 git status，不要修改任何内容"))
 
 
 class AppTests(unittest.TestCase):
@@ -370,7 +379,10 @@ class AppTests(unittest.TestCase):
         )
         new_run = self.app.state.store.create_run(new_session["id"], "new", "ship it")
         new_command = self.app.state.runner._build_command(self.app.state.store.get_session(new_session["id"]), new_run)
-        self.assertEqual(new_command[:7], [self.settings.codex_bin, "-s", "danger-full-access", "-a", "never", "exec", "--json"])
+        self.assertEqual(
+            new_command[:6],
+            [self.settings.codex_bin, "--disable", "plugins", "--dangerously-bypass-approvals-and-sandbox", "exec", "--json"],
+        )
 
         resume_session = self.app.state.store.create_session(
             cwd=str(Path(self.settings.default_allowed_root) / "proj"),
@@ -380,9 +392,12 @@ class AppTests(unittest.TestCase):
         self.app.state.store.bind_thread_id(resume_session["id"], "thread-new-123")
         resume_run = self.app.state.store.create_run(resume_session["id"], "resume", "continue")
         resume_command = self.app.state.runner._build_command(self.app.state.store.get_session(resume_session["id"]), resume_run)
-        self.assertEqual(resume_command[:8], [self.settings.codex_bin, "-s", "danger-full-access", "-a", "never", "exec", "resume", "--json"])
+        self.assertEqual(
+            resume_command[:7],
+            [self.settings.codex_bin, "--disable", "plugins", "--dangerously-bypass-approvals-and-sandbox", "exec", "resume", "--json"],
+        )
 
-    def test_runner_uses_git_write_escalation_for_commit_prompts(self) -> None:
+    def test_runner_uses_full_access_for_all_prompts(self) -> None:
         repository = self.app.state.repository
         repository.update_settings(
             model="gpt-5.4",
@@ -403,11 +418,22 @@ class AppTests(unittest.TestCase):
 
         safe_run = self.app.state.store.create_run(session["id"], "new", "show git status only")
         safe_command = self.app.state.runner._build_command(self.app.state.store.get_session(session["id"]), safe_run)
-        self.assertEqual(safe_command[:7], [self.settings.codex_bin, "-s", "workspace-write", "-a", "never", "exec", "--json"])
+        self.assertEqual(
+            safe_command[:6],
+            [self.settings.codex_bin, "--disable", "plugins", "--dangerously-bypass-approvals-and-sandbox", "exec", "--json"],
+        )
 
-        git_write_run = self.app.state.store.create_run(session["id"], "new", "请帮我 git commit 当前改动")
-        git_write_command = self.app.state.runner._build_command(self.app.state.store.get_session(session["id"]), git_write_run)
-        self.assertEqual(git_write_command[:7], [self.settings.codex_bin, "-s", "danger-full-access", "-a", "on-request", "exec", "--json"])
+        git_write_session = self.app.state.store.create_session(
+            cwd=str(Path(self.settings.default_allowed_root) / "proj"),
+            model="gpt-5.4",
+            title="git write commit",
+        )
+        git_write_run = self.app.state.store.create_run(git_write_session["id"], "new", "请帮我 git commit 当前改动")
+        git_write_command = self.app.state.runner._build_command(self.app.state.store.get_session(git_write_session["id"]), git_write_run)
+        self.assertEqual(
+            git_write_command[:6],
+            [self.settings.codex_bin, "--disable", "plugins", "--dangerously-bypass-approvals-and-sandbox", "exec", "--json"],
+        )
 
     def test_open_terminal_uses_selected_terminal_app(self) -> None:
         async def scenario() -> None:
@@ -448,8 +474,8 @@ class AppTests(unittest.TestCase):
             applescript_mock.assert_awaited_once()
             script = applescript_mock.await_args.args[0]
             self.assertIn('tell application "iTerm"', script)
-            self.assertIn("-s workspace-write", script)
-            self.assertIn("-a never", script)
+            self.assertIn("--disable plugins", script)
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox", script)
             self.assertIn("resume thread-new-123", script)
 
         asyncio.run(scenario())
@@ -496,12 +522,30 @@ class AppTests(unittest.TestCase):
                     )
             self.assertEqual(response.status_code, 200)
             payload = response.json()["data"]
-            self.assertEqual(payload["permission_profile"], "git_write")
+            self.assertEqual(payload["permission_profile"], "managed_full_access")
             script = applescript_mock.await_args.args[0]
-            self.assertIn("-s danger-full-access", script)
-            self.assertIn("-a on-request", script)
+            self.assertIn("--disable plugins", script)
+            self.assertIn("--dangerously-bypass-approvals-and-sandbox", script)
 
         asyncio.run(scenario())
+
+    def test_permission_diagnostic_reports_runtime_mismatch(self) -> None:
+        thread_id = "thread-perm-123"
+        rollout_dir = self.settings.codex_dir / "sessions" / "2026" / "04" / "09"
+        rollout_dir.mkdir(parents=True, exist_ok=True)
+        rollout_path = rollout_dir / f"rollout-2026-04-09T00-00-00-{thread_id}.jsonl"
+        rollout_path.write_text(
+            textwrap.dedent(
+                """
+                {"type":"turn_context","payload":{"approval_policy":"never","sandbox_policy":{"type":"workspace-write"}}}
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        diagnostic = self.app.state.repository.permission_diagnostic(thread_id, "danger-full-access", "never")
+        self.assertIn("requested sandbox=danger-full-access", diagnostic)
+        self.assertIn("actual sandbox=workspace-write", diagnostic)
 
     def test_session_rename_delete_and_reorder(self) -> None:
         async def scenario() -> None:
@@ -564,6 +608,24 @@ class AppTests(unittest.TestCase):
             self.assertIn(second_session_id, remaining_ids)
 
         asyncio.run(scenario())
+
+    def test_reconcile_stale_running_run_on_startup(self) -> None:
+        session = self.app.state.store.create_session(
+            cwd=str(Path(self.settings.default_allowed_root) / "proj"),
+            model="gpt-5.4",
+            title="stale session",
+        )
+        run = self.app.state.store.create_run(session["id"], "resume", "stale prompt")
+        self.app.state.store.bind_thread_id(session["id"], "thread-stale-123")
+        self.app.state.store.mark_run_started(run["id"], 999999)
+
+        app = create_app(self.settings)
+        repaired_run = app.state.store.get_run(run["id"])
+        repaired_session = app.state.store.get_session(session["id"])
+
+        self.assertEqual(repaired_run["status"], "failed")
+        self.assertIn("Recovered stale running run after service restart", repaired_run["stderr_tail"])
+        self.assertEqual(repaired_session["status"], "failed")
 
     def test_session_snapshot_contract(self) -> None:
         async def scenario() -> None:

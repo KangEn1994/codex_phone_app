@@ -283,6 +283,52 @@ class CodexRepository:
         matches = sorted(self.sessions_dir.rglob(f"*{thread_id}.jsonl"))
         return matches[-1] if matches else None
 
+    def observed_runtime_permissions(self, thread_id: str) -> dict[str, Any] | None:
+        rollout_path = self.find_rollout_path(thread_id)
+        if rollout_path is None or not rollout_path.exists():
+            return None
+        observed: dict[str, Any] | None = None
+        try:
+            with rollout_path.open("r", encoding="utf-8") as handle:
+                for line in handle:
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if obj.get("type") != "turn_context":
+                        continue
+                    payload = obj.get("payload", {})
+                    sandbox_policy = payload.get("sandbox_policy") or {}
+                    sandbox_mode = ""
+                    if isinstance(sandbox_policy, dict):
+                        sandbox_mode = str(sandbox_policy.get("type") or "").strip().lower()
+                    approval_policy = str(payload.get("approval_policy") or "").strip().lower()
+                    if not sandbox_mode and not approval_policy:
+                        continue
+                    observed = {
+                        "sandbox_mode": sandbox_mode,
+                        "approval_policy": approval_policy,
+                        "rollout_path": str(rollout_path),
+                    }
+        except OSError:
+            return None
+        return observed
+
+    def permission_diagnostic(self, thread_id: str, requested_sandbox: str, requested_approval: str) -> str:
+        observed = self.observed_runtime_permissions(thread_id)
+        if not observed:
+            return ""
+        actual_sandbox = str(observed.get("sandbox_mode") or "").strip().lower()
+        actual_approval = str(observed.get("approval_policy") or "").strip().lower()
+        if actual_sandbox == requested_sandbox and actual_approval == requested_approval:
+            return ""
+        return (
+            "Requested permissions did not fully apply. "
+            f"requested sandbox={requested_sandbox}, approval={requested_approval}; "
+            f"actual sandbox={actual_sandbox or 'unknown'}, approval={actual_approval or 'unknown'}. "
+            "This usually means the process launching Codex is itself sandbox-limited, so child runs cannot elevate further."
+        )
+
     def thread_title(self, thread_id: str) -> str | None:
         rollout_path = self.find_rollout_path(thread_id)
         if rollout_path is None:
@@ -436,6 +482,49 @@ class CodexCliRunner:
         self._lock = asyncio.Lock()
         self._shell_env_cache: dict[str, str] | None = None
 
+    @staticmethod
+    def _managed_codex_prefix() -> list[str]:
+        # Web-managed runs do not need marketplace/plugin discovery and can hang on remote sync.
+        return ["--disable", "plugins"]
+
+    @staticmethod
+    def _execution_flags(permission_profile: str, sandbox_mode: str, approval_policy: str) -> list[str]:
+        return ["--dangerously-bypass-approvals-and-sandbox"]
+
+    @staticmethod
+    def _managed_runtime_expectation() -> tuple[str, str, str]:
+        return ("danger-full-access", "never", "managed_full_access")
+
+    def _pid_is_alive(self, pid: int | None) -> bool:
+        if not pid or pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    def reconcile_incomplete_runs(self) -> list[dict[str, Any]]:
+        recovered: list[dict[str, Any]] = []
+        for run in self.store.list_active_runs():
+            session = self.store.get_session(run["session_id"])
+            if run["status"] == "running" and self._pid_is_alive(run["pid"]):
+                continue
+            reason = "Recovered stale queued run after service restart"
+            if run["status"] == "running":
+                reason = "Recovered stale running run after service restart"
+            session, final_run = self.store.finalize_run(
+                run["id"],
+                "failed",
+                None,
+                run["final_message"],
+                reason,
+            )
+            recovered.append({"session": session, "run": final_run})
+        return recovered
+
     def subscribe(self, session_id: str) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)
         self._subscribers.setdefault(session_id, set()).add(queue)
@@ -535,15 +624,13 @@ class CodexCliRunner:
         if not self.settings.codex_bin:
             raise HTTPException(status_code=503, detail={"code": "CODEX_EXEC_FAILED", "message": "Codex CLI not found"})
         effort = self.repository.default_reasoning_effort()
-        sandbox_mode, approval_policy, _ = self.repository.command_permissions(run["prompt"])
+        sandbox_mode, approval_policy, permission_profile = self._managed_runtime_expectation()
         effort_override = f'model_reasoning_effort="{effort}"'
         if run["type"] == "new":
             command = [
                 self.settings.codex_bin,
-                "-s",
-                sandbox_mode,
-                "-a",
-                approval_policy,
+                *self._managed_codex_prefix(),
+                *self._execution_flags(permission_profile, sandbox_mode, approval_policy),
                 "exec",
                 "--json",
                 "-C",
@@ -560,10 +647,8 @@ class CodexCliRunner:
             raise HTTPException(status_code=409, detail={"code": "CONFLICT", "message": "Session has no Codex thread id yet"})
         return [
             self.settings.codex_bin,
-            "-s",
-            sandbox_mode,
-            "-a",
-            approval_policy,
+            *self._managed_codex_prefix(),
+            *self._execution_flags(permission_profile, sandbox_mode, approval_policy),
             "exec",
             "resume",
             "--json",
@@ -623,12 +708,15 @@ end tell
         if not self.settings.codex_bin:
             raise HTTPException(status_code=503, detail={"code": "CODEX_EXEC_FAILED", "message": "Codex CLI not found"})
         terminal_app = self.repository.default_terminal_app()
-        sandbox_mode, approval_policy, permission_profile = self.repository.command_permissions(for_terminal=True)
+        sandbox_mode, approval_policy, permission_profile = self._managed_runtime_expectation()
+        execution_flags = " ".join(
+            shlex.quote(part) for part in self._execution_flags(permission_profile, sandbox_mode, approval_policy)
+        )
         shell_command = (
             f"cd {shlex.quote(session['cwd'])} && "
             f"{shlex.quote(self.settings.codex_bin)} "
-            f"-s {shlex.quote(sandbox_mode)} "
-            f"-a {shlex.quote(approval_policy)} "
+            f"{' '.join(shlex.quote(part) for part in self._managed_codex_prefix())} "
+            f"{execution_flags} "
             f"resume {shlex.quote(session['codex_thread_id'])}"
         )
         if terminal_app == "iterm":
@@ -758,6 +846,9 @@ end tell
             status = "cancelled"
         elif exit_code != 0 or not parser.state.turn_completed:
             status = "failed"
+        permission_note = self.repository.permission_diagnostic(thread_id, *self._managed_runtime_expectation()[:2]) if thread_id else ""
+        if permission_note:
+            stderr_tail = f"{stderr_tail}\n{permission_note}".strip()
         if status == "failed" and parser.state.last_error_message:
             stderr_tail = f"{stderr_tail}\n{parser.state.last_error_message}".strip()
         session, final_run = self.store.finalize_run(run_id, status, exit_code, parser.state.final_message, stderr_tail)

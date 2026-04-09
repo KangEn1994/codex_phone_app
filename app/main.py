@@ -25,6 +25,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     store = SessionStore(app_settings)
     repository = CodexRepository(app_settings)
     runner = CodexCliRunner(app_settings, store, repository)
+    runner.reconcile_incomplete_runs()
 
     app = FastAPI(title="Codex CLI Web Console", version="1.0.0")
     templates = Jinja2Templates(directory=str(app_settings.base_dir / "templates"))

@@ -1,0 +1,235 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP_DIR="$ROOT_DIR/.codexapp"
+PID_FILE="${CODEXAPP_PID_FILE:-$ROOT_DIR/.uvicorn.pid}"
+LOG_FILE="${CODEXAPP_LOG_FILE:-$ROOT_DIR/.uvicorn.log}"
+HOST="${CODEXAPP_HOST:-0.0.0.0}"
+PORT="${CODEXAPP_PORT:-8000}"
+PYTHON_BIN="$ROOT_DIR/.venv/bin/python"
+DEFAULT_CMD=("$PYTHON_BIN" -m uvicorn app.main:app --host "$HOST" --port "$PORT")
+
+mkdir -p "$APP_DIR"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/codexapp-server start
+  scripts/codexapp-server stop
+  scripts/codexapp-server restart
+  scripts/codexapp-server status
+  scripts/codexapp-server foreground
+
+Environment overrides:
+  CODEXAPP_HOST
+  CODEXAPP_PORT
+  CODEXAPP_PID_FILE
+  CODEXAPP_LOG_FILE
+EOF
+}
+
+clean_path() {
+  local original_path="${PATH:-}"
+  local cleaned=""
+  local entry=""
+  local first="1"
+  local old_ifs="$IFS"
+  IFS=":"
+  for entry in $original_path; do
+    if [[ -z "$entry" ]]; then
+      continue
+    fi
+    if [[ "$entry" == *"/codex.system/bootstrap/"* ]]; then
+      continue
+    fi
+    if [[ "$entry" == *"/.codex/tmp/arg0/"* ]]; then
+      continue
+    fi
+    if [[ "$first" == "1" ]]; then
+      cleaned="$entry"
+      first="0"
+    else
+      cleaned="${cleaned}:$entry"
+    fi
+  done
+  IFS="$old_ifs"
+  printf '%s\n' "$cleaned"
+}
+
+sanitize_environment() {
+  unset CODEX_CI
+  unset CODEX_INTERNAL_ORIGINATOR_OVERRIDE
+  unset CODEX_SHELL
+  unset CODEX_THREAD_ID
+  unset VIRTUAL_ENV
+  unset VIRTUAL_ENV_PROMPT
+  export PATH
+  PATH="$(clean_path)"
+}
+
+require_runtime() {
+  if [[ ! -x "$PYTHON_BIN" ]]; then
+    echo "Missing virtualenv python: $PYTHON_BIN" >&2
+    exit 1
+  fi
+}
+
+is_pid_running() {
+  local pid="$1"
+  if [[ -z "$pid" ]]; then
+    return 1
+  fi
+  kill -0 "$pid" 2>/dev/null
+}
+
+is_expected_server_pid() {
+  local pid="$1"
+  if ! is_pid_running "$pid"; then
+    return 1
+  fi
+  local command=""
+  command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  [[ "$command" == *"uvicorn app.main:app"* ]]
+}
+
+current_pid() {
+  if [[ -f "$PID_FILE" ]]; then
+    tr -d '[:space:]' <"$PID_FILE"
+  fi
+}
+
+port_listener_pid() {
+  lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | head -n 1
+}
+
+start_background() {
+  require_runtime
+  sanitize_environment
+
+  local pid
+  pid="$(current_pid || true)"
+  if is_pid_running "$pid"; then
+    echo "codexapp server already running: pid=$pid"
+    return 0
+  fi
+
+  local listener_pid
+  listener_pid="$(port_listener_pid || true)"
+  if [[ -n "$listener_pid" ]] && is_expected_server_pid "$listener_pid"; then
+    echo "$listener_pid" >"$PID_FILE"
+    echo "codexapp server already running on port $PORT: pid=$listener_pid"
+    return 0
+  fi
+  if [[ -n "$listener_pid" ]] && is_pid_running "$listener_pid"; then
+    echo "Port $PORT is already in use by pid=$listener_pid" >&2
+    return 1
+  fi
+
+  cd "$ROOT_DIR"
+  nohup "${DEFAULT_CMD[@]}" >"$LOG_FILE" 2>&1 &
+  local new_pid=$!
+  echo "$new_pid" >"$PID_FILE"
+  sleep 1
+  if is_pid_running "$new_pid"; then
+    echo "codexapp server started: pid=$new_pid host=$HOST port=$PORT"
+    echo "log: $LOG_FILE"
+    return 0
+  fi
+  echo "Failed to start codexapp server. Check log: $LOG_FILE" >&2
+  return 1
+}
+
+start_foreground() {
+  require_runtime
+  sanitize_environment
+  cd "$ROOT_DIR"
+  exec "${DEFAULT_CMD[@]}"
+}
+
+stop_server() {
+  local pid
+  pid="$(current_pid || true)"
+  if [[ -z "$pid" ]] || ! is_pid_running "$pid"; then
+    local listener_pid
+    listener_pid="$(port_listener_pid || true)"
+    if [[ -n "$listener_pid" ]] && is_expected_server_pid "$listener_pid"; then
+      pid="$listener_pid"
+      echo "$pid" >"$PID_FILE"
+    fi
+  fi
+  if ! is_pid_running "$pid"; then
+    rm -f "$PID_FILE"
+    echo "codexapp server is not running"
+    return 0
+  fi
+
+  kill -TERM "$pid"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if ! is_pid_running "$pid"; then
+      rm -f "$PID_FILE"
+      echo "codexapp server stopped"
+      return 0
+    fi
+    sleep 1
+  done
+
+  kill -KILL "$pid" 2>/dev/null || true
+  rm -f "$PID_FILE"
+  echo "codexapp server force stopped"
+  return 0
+}
+
+status_server() {
+  local pid
+  pid="$(current_pid || true)"
+  if is_pid_running "$pid"; then
+    echo "codexapp server running: pid=$pid host=$HOST port=$PORT"
+    return 0
+  fi
+  local listener_pid
+  listener_pid="$(port_listener_pid || true)"
+  if [[ -n "$listener_pid" ]] && is_expected_server_pid "$listener_pid"; then
+    echo "$listener_pid" >"$PID_FILE"
+    echo "codexapp server running: pid=$listener_pid host=$HOST port=$PORT"
+    return 0
+  fi
+  if [[ -n "$listener_pid" ]] && is_pid_running "$listener_pid"; then
+    echo "port $PORT is occupied by pid=$listener_pid"
+    return 1
+  fi
+  echo "codexapp server is stopped"
+}
+
+main() {
+  local command="${1:-start}"
+  case "$command" in
+    start)
+      start_background
+      ;;
+    stop)
+      stop_server
+      ;;
+    restart)
+      stop_server || true
+      start_background
+      ;;
+    status)
+      status_server
+      ;;
+    foreground)
+      start_foreground
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      echo "Unknown command: $command" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

@@ -35,16 +35,13 @@ GIT_WRITE_INTENT_PATTERN = re.compile(
     r"(?:"
     r"\bgit\s+(?:add|commit|merge|rebase|cherry-pick|stash|tag|branch|switch|checkout|restore|reset|revert|push|commit-tree)\b"
     r"|(?:\bcommit\b|\bamend\b|\brebase\b|\bstash\b|\bcherry-pick\b)"
-    r"|提交(?:代码|仓库)?"
+    r"|提交"
     r"|git提交"
     r"|暂存(?:更改|修改|文件)?"
-    r"|合并分支"
-    r"|切换分支"
-    r"|新建分支"
-    r"|创建分支"
+    r"|推送"
+    r"|分支"
     r"|变基"
     r"|打(?:tag|标签)"
-    r"|推送代码"
     r")",
     re.IGNORECASE,
 )
