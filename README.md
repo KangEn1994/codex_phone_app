@@ -99,7 +99,7 @@ scripts/codexapp-server foreground
 仓库里已经补充了 Docker Compose 部署结构：
 
 - [docker/Dockerfile](/Users/kang_en/codex/codexapp/docker/Dockerfile): 镜像构建文件，镜像内安装 Python 依赖和 Codex CLI
-- [.github/workflows/docker-image.yml](/Users/kang_en/codex/codexapp/.github/workflows/docker-image.yml): GitHub Actions 远端构建并推送 GHCR 镜像
+- [.github/workflows/docker-image.yml](/Users/kang_en/codex/codexapp/.github/workflows/docker-image.yml): GitHub Actions 远端构建并推送 GHCR 镜像，并可选同步推送到 Docker Hub
 - [stack/docker-compose.yml](/Users/kang_en/codex/codexapp/stack/docker-compose.yml): Compose 部署入口
 - [stack/.env.example](/Users/kang_en/codex/codexapp/stack/.env.example): 环境变量示例
 - [stack/README.md](/Users/kang_en/codex/codexapp/stack/README.md): 部署说明
@@ -107,8 +107,16 @@ scripts/codexapp-server foreground
 GitHub Actions 工作流默认行为：
 
 - 推送到 `main` 时在 GitHub 远端构建镜像并推送到 `ghcr.io/<owner>/<repo>`
+- 如果配置了 `DOCKERHUB_IMAGE_NAME`、`DOCKERHUB_USERNAME` 和 `DOCKERHUB_TOKEN`，同一次构建会额外推送到 `docker.io/<namespace>/<repository>`
 - 推送 `v*` tag 时额外生成语义化版本标签
 - 提交 PR 到 `main` 时只做构建校验，不推送镜像
+
+Docker Hub 配置方式：
+
+- 在 GitHub 仓库的 Variables 里新增 `DOCKERHUB_IMAGE_NAME`，值例如 `yourname/codexapp`
+- 在 GitHub 仓库的 Secrets 里新增 `DOCKERHUB_USERNAME`
+- 在 GitHub 仓库的 Secrets 里新增 `DOCKERHUB_TOKEN`
+- `DOCKERHUB_TOKEN` 推荐使用 Docker Hub Access Token；如果你必须使用密码，也应放在这个 Secret 里
 
 Compose 使用方式：
 

@@ -30,8 +30,8 @@ http://127.0.0.1:8000/
 
 ## 重要说明
 
-- 远端镜像推荐使用 GitHub Actions 构建后推送到 GHCR，对应流程见 [../.github/workflows/docker-image.yml](/Users/kang_en/codex/codexapp/.github/workflows/docker-image.yml)
-- `.env` 里的 `CODEXAPP_IMAGE_NAME` 需要改成你自己的 GHCR 镜像名，例如 `ghcr.io/<owner>/<repo>:latest`
+- 远端镜像推荐使用 GitHub Actions 构建后推送到 GHCR；如果配置了 Docker Hub 凭据，也会同时推送到 Docker Hub，对应流程见 [../.github/workflows/docker-image.yml](/Users/kang_en/codex/codexapp/.github/workflows/docker-image.yml)
+- `.env` 里的 `CODEXAPP_IMAGE_NAME` 需要改成你实际推送的镜像名，例如 `ghcr.io/<owner>/<repo>:latest` 或 `docker.io/<namespace>/<repository>:latest`
 - 容器重启后，已完成的 Codex 会话和应用状态会保留，因为 `/root/.codex` 和 `/data/codexapp` 都被持久化了
 - 容器重启时，正在执行中的 CLI 进程会中断，应用重启后会把这类运行标记为失败
 - 容器内部不支持 macOS 的 Terminal/iTerm 打开会话能力
