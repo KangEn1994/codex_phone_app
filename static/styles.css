@@ -497,6 +497,10 @@ textarea {
 
 .message-list {
   align-content: start;
+  max-height: min(48vh, 720px);
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior: contain;
 }
 
 .conversation-compose {
@@ -536,6 +540,13 @@ textarea {
 
 .run-highlights.collapsed {
   display: none;
+}
+
+.event-log {
+  max-height: min(28vh, 360px);
+  overflow-y: auto;
+  padding-right: 6px;
+  overscroll-behavior: contain;
 }
 
 .event-row.accent {
@@ -728,6 +739,14 @@ textarea {
 
   .session-context-wide {
     grid-column: auto;
+  }
+
+  .message-list {
+    max-height: 40vh;
+  }
+
+  .event-log {
+    max-height: 24vh;
   }
 }
 
