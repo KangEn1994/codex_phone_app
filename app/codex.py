@@ -108,10 +108,18 @@ class CodexRepository:
         if not value:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "cwd is required"})
         candidate = Path(value).expanduser()
-        if not candidate.exists() or not candidate.is_dir():
-            raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "Workspace path must be an existing directory"})
         if not self.is_allowed_cwd(str(candidate)):
             raise HTTPException(status_code=403, detail={"code": "PROJECT_NOT_ALLOWED", "message": "Workspace not allowed"})
+        if candidate.exists() and not candidate.is_dir():
+            raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "Workspace path must be a directory"})
+        if not candidate.exists():
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail={"code": "INTERNAL_ERROR", "message": f"Failed to create workspace directory: {exc}"},
+                ) from exc
         return {
             "name": candidate.name,
             "path": str(candidate),
@@ -584,8 +592,8 @@ class CodexCliRunner:
     async def start_session(self, cwd: str, model: str, prompt: str) -> tuple[dict[str, Any], dict[str, Any]]:
         if not self.settings.codex_bin:
             raise HTTPException(status_code=503, detail={"code": "CODEX_EXEC_FAILED", "message": "Codex CLI not found"})
-        self.repository.ensure_workspace(cwd)
-        session = self.store.create_session(cwd=cwd, model=model or self.repository.default_model(), title=prompt_title(prompt))
+        workspace = self.repository.ensure_workspace(cwd)
+        session = self.store.create_session(cwd=workspace["path"], model=model or self.repository.default_model(), title=prompt_title(prompt))
         run = self.store.create_run(session["id"], "new", prompt)
         session = self.store.get_session(session["id"])
         await self._broadcast(session["id"], "run.queued", {"session": session, "run": run})
