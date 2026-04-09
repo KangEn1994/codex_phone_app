@@ -56,7 +56,6 @@ class MainActivity : AppCompatActivity() {
             binding.webView.reload()
         }
         binding.changeServerButton.setOnClickListener { showServerConfigPanel() }
-        binding.editServerButton.setOnClickListener { showServerConfigPanel() }
         binding.cancelServerButton.setOnClickListener {
             if (currentBaseUri != null) {
                 hideServerConfigPanel()
@@ -181,14 +180,12 @@ class MainActivity : AppCompatActivity() {
         binding.serverUrlInput.error = null
         binding.serverConfigPanel.visibility = View.VISIBLE
         binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
-        binding.topBar.visibility = View.GONE
         binding.errorPanel.visibility = View.GONE
         hideLoading()
     }
 
     private fun hideServerConfigPanel() {
         binding.serverConfigPanel.visibility = View.GONE
-        binding.topBar.visibility = View.VISIBLE
     }
 
     private fun openExternal(uri: Uri) {

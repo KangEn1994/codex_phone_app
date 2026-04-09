@@ -8,21 +8,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <LinearLayout
-        android:id="@+id/top_bar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="end"
-        android:orientation="horizontal"
-        android:padding="12dp">
-
-        <Button
-            android:id="@+id/edit_server_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/edit_server" />
-    </LinearLayout>
-
     <ProgressBar
         android:id="@+id/loading_indicator"
         style="?android:attr/progressBarStyleLarge"

@@ -36,6 +36,8 @@ const state = {
   newSessionExpanded: false,
   shouldScrollSessionBottom: false,
   openSessionMenuId: null,
+  sessionSearchQuery: "",
+  sessionFilter: "all",
 };
 
 function detectRuntime() {
@@ -152,6 +154,49 @@ function selectedSession() {
 
 function selectedActiveRun() {
   return state.runs.find((run) => run.status === "queued" || run.status === "running") || state.runs[0] || null;
+}
+
+function sessionLatestPrompt(session) {
+  return String(session?.latest_run?.prompt || "").trim();
+}
+
+function sessionSearchableText(session) {
+  return [
+    session?.title,
+    session?.cwd,
+    session?.branch_name,
+    session?.model,
+    sessionLatestPrompt(session),
+    session?.codex_thread_id,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+}
+
+function sessionMatchesFilter(session) {
+  if (!session) {
+    return false;
+  }
+  const filter = state.sessionFilter;
+  if (filter === "active" && !["queued", "running"].includes(session.status)) {
+    return false;
+  }
+  if (filter === "failed" && session.status !== "failed") {
+    return false;
+  }
+  if (filter === "ready" && session.status !== "ready") {
+    return false;
+  }
+  const query = String(state.sessionSearchQuery || "").trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+  return sessionSearchableText(session).includes(query);
+}
+
+function filteredSessions() {
+  return state.sessions.filter(sessionMatchesFilter);
 }
 
 function basename(value) {
@@ -332,8 +377,9 @@ function isWorkspaceExpanded(workspace) {
 }
 
 function visibleWorkspaceGroups() {
+  const filtered = filteredSessions();
   const sessionMap = new Map();
-  for (const session of state.sessions) {
+  for (const session of filtered) {
     const workspace = workspaceForCwd(session.cwd);
     if (!workspace) {
       continue;
@@ -343,7 +389,11 @@ function visibleWorkspaceGroups() {
     sessionMap.set(workspace.path, list);
   }
   return state.workspaces
-    .map((workspace) => ({ workspace, sessions: sessionMap.get(workspace.path) || [] }))
+    .map((workspace) => ({
+      workspace,
+      sessions: sessionMap.get(workspace.path) || [],
+      totalSessions: state.sessions.filter((session) => workspaceForCwd(session.cwd)?.path === workspace.path).length,
+    }))
     .filter((group) => group.sessions.length > 0 || group.workspace.pinned || normalizePath(state.newSessionCwd).startsWith(normalizePath(group.workspace.path)));
 }
 
@@ -511,6 +561,65 @@ function recentRunHighlights(run, events) {
   return [...items, ...eventItems].slice(0, 6);
 }
 
+function sessionStatusLabel(status) {
+  const labels = {
+    ready: "空闲",
+    queued: "排队中",
+    running: "执行中",
+    failed: "失败",
+    cancelled: "已取消",
+    completed: "已完成",
+  };
+  return labels[status] || status || "未知";
+}
+
+function sessionVerificationLabel(session) {
+  const latestRun = session?.latest_run;
+  if (!latestRun) {
+    return "暂无运行记录";
+  }
+  if (latestRun.status === "failed") {
+    return "最近一次执行失败";
+  }
+  if (latestRun.status === "cancelled") {
+    return "最近一次执行已取消";
+  }
+  if (latestRun.status === "running") {
+    return "正在执行";
+  }
+  if (latestRun.status === "queued") {
+    return "等待执行";
+  }
+  return latestRun.final_message ? "已有结果，可继续推进" : "执行结束，未见最终摘要";
+}
+
+function renderSidebarFilters() {
+  const options = [
+    ["all", "全部"],
+    ["active", "进行中"],
+    ["failed", "失败"],
+    ["ready", "空闲"],
+  ];
+  const filteredCount = filteredSessions().length;
+  return `
+    <section class="sidebar-toolbar shell-subpanel">
+      <label class="search-field">
+        <span>检索会话</span>
+        <input id="session-search-input" value="${escapeHtml(state.sessionSearchQuery)}" placeholder="搜索标题、路径、分支、prompt" />
+      </label>
+      <div class="filter-strip">
+        ${options
+          .map(
+            ([value, label]) =>
+              `<button class="filter-chip ${state.sessionFilter === value ? "active" : ""}" type="button" data-action="set-session-filter" data-filter="${escapeHtml(value)}">${escapeHtml(label)}</button>`,
+          )
+          .join("")}
+      </div>
+      <p class="subtle sidebar-filter-summary">当前显示 ${filteredCount} / ${state.sessions.length} 条会话</p>
+    </section>
+  `;
+}
+
 function renderLogin() {
   document.getElementById("app").innerHTML = `
     <main class="screen auth-screen">
@@ -570,6 +679,8 @@ function renderSidebar() {
         <button class="ghost-button small-button" data-action="focus-new-session">新会话</button>
       </div>
 
+      ${renderSidebarFilters()}
+
       <section class="composer-card shell-subpanel sidebar-new-session ${state.newSessionExpanded ? "" : "collapsed"}">
         <div class="card-head">
           <p class="eyebrow">New Session</p>
@@ -602,7 +713,7 @@ function renderSidebar() {
                       <span>${escapeHtml(group.workspace.path)}</span>
                     </div>
                     <div class="project-meta">
-                      <span>${group.sessions.length} 条会话</span>
+                      <span>${group.sessions.length}${group.totalSessions !== group.sessions.length ? ` / ${group.totalSessions}` : ""} 条会话</span>
                       <span>${group.sessions[0] ? escapeHtml(formatRelative(group.sessions[0].updated_at)) : "暂无更新"}</span>
                     </div>
                   </button>
@@ -620,13 +731,19 @@ function renderSidebar() {
                                     <button class="thread-card-main" data-session-id="${escapeHtml(session.id)}">
                                       <strong>${escapeHtml(session.title || "未命名会话")}</strong>
                                       <div class="thread-node-row">
-                                        <span class="thread-node-meta">ID: ${escapeHtml(session.codex_thread_id || session.id)}</span>
+                                        <span class="thread-node-meta">${escapeHtml(basename(session.cwd) || "项目未知")}</span>
+                                        ${session.branch_name ? `<span class="thread-node-meta">分支 ${escapeHtml(session.branch_name)}</span>` : ""}
                                       </div>
                                       <div class="thread-node-row">
                                         <span class="thread-node-meta">${escapeHtml(session.model || "默认模型")}</span>
                                         <span class="thread-node-meta">${escapeHtml(formatRelative(session.updated_at))}</span>
                                         ${statusBadge(session.status)}
                                       </div>
+                                      ${
+                                        sessionLatestPrompt(session)
+                                          ? `<p class="thread-card-summary">${escapeHtml(truncateText(sessionLatestPrompt(session), 88))}</p>`
+                                          : ""
+                                      }
                                     </button>
                                     <button
                                       class="ghost-button small-button thread-card-menu-toggle ${state.openSessionMenuId === session.id ? "active" : ""}"
@@ -749,6 +866,7 @@ function renderCurrentSessionPane() {
   const session = selectedSession();
   const status = session?.status;
   const showSessionStatus = status && status !== "ready";
+  const latestRun = session?.latest_run || selectedActiveRun();
   const projectMeta = session
     ? [basename(session.cwd), session.model, session.branch_name ? `分支 ${session.branch_name}` : ""].filter(Boolean).join(" · ")
     : "选择左侧会话，或者先到项目列表里新建一个";
@@ -774,9 +892,42 @@ function renderCurrentSessionPane() {
             `
             : ""
         }
-      </header>
+	      </header>
 
-      <section class="messages-panel shell-subpanel conversation-panel">
+        ${
+          session
+            ? `
+              <section class="session-context-grid">
+                <article class="status-card">
+                  <span>仓库</span>
+                  <strong>${escapeHtml(basename(session.cwd) || session.cwd)}</strong>
+                </article>
+                <article class="status-card">
+                  <span>分支</span>
+                  <strong>${escapeHtml(session.branch_name || "未识别")}</strong>
+                </article>
+                <article class="status-card">
+                  <span>当前状态</span>
+                  <strong>${escapeHtml(sessionStatusLabel(session.status))}</strong>
+                </article>
+                <article class="status-card">
+                  <span>最近一次运行</span>
+                  <strong>${escapeHtml(latestRun ? `${sessionStatusLabel(latestRun.status)} · ${formatRelative(latestRun.completed_at || latestRun.started_at || latestRun.created_at)}` : "暂无")}</strong>
+                </article>
+                <article class="status-card session-context-wide">
+                  <span>最近一次 prompt</span>
+                  <strong>${escapeHtml(sessionLatestPrompt(session) || "还没有输入过继续指令")}</strong>
+                </article>
+                <article class="status-card session-context-wide">
+                  <span>执行判断</span>
+                  <strong>${escapeHtml(sessionVerificationLabel(session))}</strong>
+                </article>
+              </section>
+            `
+            : ""
+        }
+
+	      <section class="messages-panel shell-subpanel conversation-panel">
         <div class="panel-headline">
           <div>
             <p class="eyebrow">Conversation</p>
@@ -1141,6 +1292,18 @@ function renderApp() {
       state.expandedWorkspacePaths[workspacePath] = !isWorkspaceExpanded({ path: workspacePath, pinned: false });
       render();
     });
+  });
+
+  document.querySelectorAll("[data-action='set-session-filter']").forEach((element) => {
+    element.addEventListener("click", () => {
+      state.sessionFilter = element.getAttribute("data-filter") || "all";
+      render();
+    });
+  });
+
+  document.getElementById("session-search-input")?.addEventListener("input", (event) => {
+    state.sessionSearchQuery = event.target.value;
+    render();
   });
 
   document.querySelectorAll("[data-action='set-mobile-tab']").forEach((element) => {

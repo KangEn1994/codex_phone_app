@@ -245,9 +245,43 @@ textarea {
 .thread-list,
 .message-list,
 .event-log,
-.settings-summary-grid {
+.settings-summary-grid,
+.session-context-grid {
   display: grid;
   gap: 12px;
+}
+
+.sidebar-toolbar {
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.search-field {
+  display: grid;
+  gap: 6px;
+}
+
+.filter-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.filter-chip.active {
+  background: linear-gradient(135deg, rgba(11, 110, 79, 0.14), rgba(255, 255, 255, 0.92));
+  border-color: rgba(11, 110, 79, 0.18);
+}
+
+.sidebar-filter-summary {
+  margin: 0;
 }
 
 .sidebar-new-session.collapsed {
@@ -323,6 +357,13 @@ textarea {
   width: 100%;
 }
 
+.thread-card-summary {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 .project-toggle,
 .session-switch-chip {
   width: 100%;
@@ -390,10 +431,15 @@ textarea {
 }
 
 .status-strip,
-.settings-summary-grid {
+.settings-summary-grid,
+.session-context-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.session-context-wide {
+  grid-column: span 3;
 }
 
 .status-card {
@@ -674,9 +720,14 @@ textarea {
   .workspace-layout,
   .current-grid,
   .status-strip,
+  .session-context-grid,
   .settings-summary-grid,
   .settings-subgrid {
     grid-template-columns: 1fr;
+  }
+
+  .session-context-wide {
+    grid-column: auto;
   }
 }
 

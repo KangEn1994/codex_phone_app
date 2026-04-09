@@ -63,19 +63,26 @@ jobs:
       - name: Build Android release APK and AAB
         run: ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease
 
+      - name: Generate artifact metadata
+        id: artifact_meta
+        run: |
+          stamp="$(date -u +%Y%m%d-%H%M%S)"
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACT_STAMP=$stamp" >> "$GITHUB_ENV"
+
       - name: Prepare Android artifacts
         run: |
           mkdir -p build/ci-artifacts/debug build/ci-artifacts/release
-          cp app/build/outputs/apk/debug/*.apk build/ci-artifacts/debug/codexapp-android-debug.apk
-          cp app/build/outputs/apk/release/*.apk build/ci-artifacts/release/codexapp-android-release.apk
-          cp app/build/outputs/bundle/release/*.aab build/ci-artifacts/release/codexapp-android-release.aab
+          cp app/build/outputs/apk/debug/*.apk "build/ci-artifacts/debug/codexapp-android-debug-${ARTIFACT_STAMP}.apk"
+          cp app/build/outputs/apk/release/*.apk "build/ci-artifacts/release/codexapp-android-release-${ARTIFACT_STAMP}.apk"
+          cp app/build/outputs/bundle/release/*.aab "build/ci-artifacts/release/codexapp-android-release-${ARTIFACT_STAMP}.aab"
 
       - name: Upload Android debug APK
         id: upload_debug_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: codexapp-android-debug-apk
-          path: mobile/android-shell/build/ci-artifacts/debug/codexapp-android-debug.apk
+          name: codexapp-android-debug-apk-${{ steps.artifact_meta.outputs.stamp }}
+          path: mobile/android-shell/build/ci-artifacts/debug/codexapp-android-debug-${{ steps.artifact_meta.outputs.stamp }}.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -83,10 +90,10 @@ jobs:
         id: upload_release_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: codexapp-android-release-package
+          name: codexapp-android-release-package-${{ steps.artifact_meta.outputs.stamp }}
           path: |
-            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release.apk
-            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release.aab
+            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release-${{ steps.artifact_meta.outputs.stamp }}.apk
+            mobile/android-shell/build/ci-artifacts/release/codexapp-android-release-${{ steps.artifact_meta.outputs.stamp }}.aab
           if-no-files-found: error
           retention-days: 14
 
@@ -105,6 +112,7 @@ jobs:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           DEBUG_ARTIFACT_URL: ${{ steps.upload_debug_artifact.outputs.artifact-url }}
           RELEASE_ARTIFACT_URL: ${{ steps.upload_release_artifact.outputs.artifact-url }}
+          ARTIFACT_STAMP: ${{ steps.artifact_meta.outputs.stamp }}
         run: |
           python3 - <<'PY' > feishu-payload.json
           import base64
@@ -139,6 +147,7 @@ jobs:
           commit_url = f"{server_url}/{repo}/commit/{sha}"
           debug_artifact_url = os.environ.get("DEBUG_ARTIFACT_URL", "").strip()
           release_artifact_url = os.environ.get("RELEASE_ARTIFACT_URL", "").strip()
+          artifact_stamp = os.environ.get("ARTIFACT_STAMP", "").strip()
 
           payload = {
               "msg_type": "interactive",
@@ -196,7 +205,8 @@ jobs:
                                       f"**运行号**\n#{run_number}\n\n"
                                       f"**提交**\n`{sha[:7]}`\n\n"
                                       "**产物**\n"
-                                      "`codexapp-android-debug-apk`、`codexapp-android-release-package`\n\n"
+                                      f"`codexapp-android-debug-apk-{artifact_stamp}`、"
+                                      f"`codexapp-android-release-package-{artifact_stamp}`\n\n"
                                       "下载链接需要登录 GitHub。"
                                   ),
                               },

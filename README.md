@@ -144,9 +144,10 @@ docker compose up -d
 
 工作流默认行为：
 
-- 会产出 `codexapp-android-debug-apk`
-- 会额外构建 `codexapp-android-release-package`
-- `codexapp-android-debug-apk` 内是 `codexapp-android-debug.apk`，最适合先做本地安装测试
+- 会产出带 UTC 时间戳的 `codexapp-android-debug-apk-<timestamp>`
+- 会额外构建带 UTC 时间戳的 `codexapp-android-release-package-<timestamp>`
+- debug 包文件名类似 `codexapp-android-debug-20260409-123456.apk`，最适合先做本地安装测试
+- release 产物会同时包含 `.apk` 和 `.aab`
 
 Android 可选签名 Secrets：
 
