@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val pollRunnable = Runnable {
-        if (binding.nativeShellPanel.visibility == View.VISIBLE) {
+        if (shouldPollShell()) {
             if (currentScreen == Screen.DETAIL && !selectedSessionId.isNullOrBlank()) {
                 refreshSelectedSessionDetail(showLoadingIndicator = false)
             } else {
@@ -943,8 +943,15 @@ class MainActivity : AppCompatActivity() {
             appendLog("HTTP $method $endpoint -> $code $message")
             ApiResult(success = code in 200..299, code = code, data = data, userMessage = if (code in 200..299) "" else message, setCookies = cookies)
         }.getOrElse {
-            appendLog("HTTP $method $endpoint -> NETWORK_ERROR ${it.message.orEmpty()}")
-            ApiResult(success = false, code = -1, data = null, userMessage = getString(R.string.login_connection_failed), setCookies = emptyList())
+            val networkMessage = formatNetworkErrorMessage(it.message.orEmpty())
+            appendLog("HTTP $method $endpoint -> NETWORK_ERROR $networkMessage")
+            ApiResult(
+                success = false,
+                code = -1,
+                data = null,
+                userMessage = buildNetworkFailureMessage(baseUri),
+                setCookies = emptyList(),
+            )
         }
     }
 
@@ -1068,6 +1075,32 @@ class MainActivity : AppCompatActivity() {
             for (index in 0 until length()) {
                 optJSONObject(index)?.let(::add)
             }
+        }
+    }
+
+    private fun shouldPollShell(): Boolean {
+        return binding.nativeShellPanel.visibility == View.VISIBLE &&
+            bootstrapData != null &&
+            logsReturnSurface == OverlaySurface.SHELL &&
+            currentScreen != Screen.LOGS
+    }
+
+    private fun buildNetworkFailureMessage(baseUri: Uri): String {
+        return "无法连接到当前服务器（${baseUri.hostWithPort()}），请检查地址、端口或服务状态。"
+    }
+
+    private fun formatNetworkErrorMessage(raw: String): String {
+        if (raw.isBlank()) {
+            return "连接失败"
+        }
+        return raw.replace(Regex("""([A-Za-z0-9.-]+)/((?:\d{1,3}\.){3}\d{1,3}:\d+)"""), "$1 ($2)")
+    }
+
+    private fun Uri.hostWithPort(): String {
+        return if (port != -1) {
+            "${host.orEmpty()}:$port"
+        } else {
+            host.orEmpty()
         }
     }
 
