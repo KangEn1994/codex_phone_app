@@ -19,7 +19,7 @@ const state = {
   sessionPollTimer: null,
   sessionFx: null,
   sessionFxTimer: null,
-  mobileTab: "session",
+  mobileTab: "inbox",
   expandedWorkspacePaths: {},
   composeMode: "resume",
   composePrompt: "",
@@ -1529,6 +1529,17 @@ const I18N_PATCH = {
     "current.lastReply": "最近回复",
     "current.noReply": "暂无最终回复",
     "prompt.pinFailed": "置顶失败",
+    "tabs.inbox": "会话",
+    "mobile.back": "返回",
+    "mobile.openSettings": "设置",
+    "mobile.sessionListTitle": "会话",
+    "mobile.sessionListSubtitle": "只保留最需要继续推进的线程。",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "先从列表里选一个会话。",
+    "mobile.status.running": "正在执行，稍后会自动回填结果。",
+    "mobile.status.failed": "上一轮失败了，可以直接补一句继续推进。",
+    "mobile.status.queued": "已进入队列，保持当前页面即可。",
+    "mobile.status.ready": "当前空闲，可以继续发消息。",
   },
   "zh-TW": {
     "sidebar.filter.pinned": "置頂",
@@ -1545,6 +1556,17 @@ const I18N_PATCH = {
     "current.lastReply": "最近回覆",
     "current.noReply": "暫無最終回覆",
     "prompt.pinFailed": "置頂失敗",
+    "tabs.inbox": "會話",
+    "mobile.back": "返回",
+    "mobile.openSettings": "設定",
+    "mobile.sessionListTitle": "會話",
+    "mobile.sessionListSubtitle": "只保留最需要繼續推進的執行緒。",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "先從列表選一個會話。",
+    "mobile.status.running": "正在執行，稍後會自動補上結果。",
+    "mobile.status.failed": "上一輪失敗了，可以直接補一句繼續推進。",
+    "mobile.status.queued": "已進入佇列，保持目前頁面即可。",
+    "mobile.status.ready": "目前空閒，可以繼續傳送訊息。",
   },
   en: {
     "sidebar.filter.pinned": "Pinned",
@@ -1561,6 +1583,152 @@ const I18N_PATCH = {
     "current.lastReply": "Last Reply",
     "current.noReply": "No final reply yet",
     "prompt.pinFailed": "Failed to update pin",
+    "tabs.inbox": "Inbox",
+    "mobile.back": "Back",
+    "mobile.openSettings": "Settings",
+    "mobile.sessionListTitle": "Sessions",
+    "mobile.sessionListSubtitle": "Keep only the threads you actually need to move forward.",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "Pick a session from the list first.",
+    "mobile.status.running": "Running now. Results will sync back automatically.",
+    "mobile.status.failed": "The last turn failed. You can continue directly from here.",
+    "mobile.status.queued": "Queued now. Stay on this screen and it will update.",
+    "mobile.status.ready": "Idle now. Send the next message when ready.",
+  },
+  ja: {
+    "sidebar.filter.pinned": "ピン留め",
+    "sidebar.live": "リアルタイム同期",
+    "sidebar.reconnecting": "再接続中",
+    "sidebar.polling": "ポーリング待機",
+    "sidebar.offline": "オフライン",
+    "session.pin": "ピン留め",
+    "session.unpin": "ピンを外す",
+    "session.pinned": "ピン留め済み",
+    "session.more": "その他",
+    "session.quickContinue": "続ける",
+    "current.sync": "同期状態",
+    "current.lastReply": "最新の返信",
+    "current.noReply": "最終返信はまだありません",
+    "prompt.pinFailed": "ピン留めの更新に失敗しました",
+    "tabs.inbox": "セッション",
+    "mobile.back": "戻る",
+    "mobile.openSettings": "設定",
+    "mobile.sessionListTitle": "セッション",
+    "mobile.sessionListSubtitle": "今進める必要があるスレッドだけを残します。",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "まず一覧からセッションを選んでください。",
+    "mobile.status.running": "実行中です。結果は自動で反映されます。",
+    "mobile.status.failed": "前回は失敗しました。ここからそのまま続けられます。",
+    "mobile.status.queued": "キューに入りました。この画面のままで更新されます。",
+    "mobile.status.ready": "現在は待機中です。準備ができたら次のメッセージを送れます。",
+  },
+  ko: {
+    "sidebar.filter.pinned": "고정",
+    "sidebar.live": "실시간 동기화",
+    "sidebar.reconnecting": "재연결 중",
+    "sidebar.polling": "폴링 백업",
+    "sidebar.offline": "오프라인",
+    "session.pin": "고정",
+    "session.unpin": "고정 해제",
+    "session.pinned": "고정됨",
+    "session.more": "더보기",
+    "session.quickContinue": "계속",
+    "current.sync": "동기화 상태",
+    "current.lastReply": "최근 답변",
+    "current.noReply": "최종 답변이 아직 없습니다",
+    "prompt.pinFailed": "고정 상태를 업데이트하지 못했습니다",
+    "tabs.inbox": "세션",
+    "mobile.back": "뒤로",
+    "mobile.openSettings": "설정",
+    "mobile.sessionListTitle": "세션",
+    "mobile.sessionListSubtitle": "지금 실제로 이어서 진행할 스레드만 남깁니다.",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "먼저 목록에서 세션을 선택해 주세요.",
+    "mobile.status.running": "실행 중입니다. 결과는 자동으로 다시 동기화됩니다.",
+    "mobile.status.failed": "직전 턴이 실패했습니다. 여기서 바로 이어서 진행할 수 있습니다.",
+    "mobile.status.queued": "대기열에 들어갔습니다. 이 화면에서 업데이트됩니다.",
+    "mobile.status.ready": "현재 유휴 상태입니다. 준비되면 다음 메시지를 보내세요.",
+  },
+  ar: {
+    "sidebar.filter.pinned": "مثبتة",
+    "sidebar.live": "مزامنة فورية",
+    "sidebar.reconnecting": "جارٍ إعادة الاتصال",
+    "sidebar.polling": "استطلاع احتياطي",
+    "sidebar.offline": "غير متصل",
+    "session.pin": "تثبيت",
+    "session.unpin": "إلغاء التثبيت",
+    "session.pinned": "مثبتة",
+    "session.more": "المزيد",
+    "session.quickContinue": "متابعة",
+    "current.sync": "حالة المزامنة",
+    "current.lastReply": "آخر رد",
+    "current.noReply": "لا يوجد رد نهائي بعد",
+    "prompt.pinFailed": "تعذر تحديث التثبيت",
+    "tabs.inbox": "الجلسات",
+    "mobile.back": "رجوع",
+    "mobile.openSettings": "الإعدادات",
+    "mobile.sessionListTitle": "الجلسات",
+    "mobile.sessionListSubtitle": "احتفظ فقط بالمحادثات التي تحتاج فعلًا إلى متابعتها الآن.",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "اختر جلسة من القائمة أولًا.",
+    "mobile.status.running": "التنفيذ جارٍ الآن. ستتم مزامنة النتائج تلقائيًا.",
+    "mobile.status.failed": "فشلت الجولة السابقة. يمكنك المتابعة مباشرة من هنا.",
+    "mobile.status.queued": "تمت إضافتها إلى قائمة الانتظار. ابق على هذه الشاشة وسيتم التحديث.",
+    "mobile.status.ready": "الجلسة الآن في وضع الخمول. أرسل الرسالة التالية عندما تكون جاهزًا.",
+  },
+  ru: {
+    "sidebar.filter.pinned": "Закреплённые",
+    "sidebar.live": "Мгновенная синхронизация",
+    "sidebar.reconnecting": "Переподключение",
+    "sidebar.polling": "Резервный опрос",
+    "sidebar.offline": "Не в сети",
+    "session.pin": "Закрепить",
+    "session.unpin": "Открепить",
+    "session.pinned": "Закреплено",
+    "session.more": "Ещё",
+    "session.quickContinue": "Продолжить",
+    "current.sync": "Состояние синхронизации",
+    "current.lastReply": "Последний ответ",
+    "current.noReply": "Финального ответа пока нет",
+    "prompt.pinFailed": "Не удалось обновить закрепление",
+    "tabs.inbox": "Сессии",
+    "mobile.back": "Назад",
+    "mobile.openSettings": "Настройки",
+    "mobile.sessionListTitle": "Сессии",
+    "mobile.sessionListSubtitle": "Оставьте только те треды, которые действительно нужно продолжать сейчас.",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "Сначала выберите сессию из списка.",
+    "mobile.status.running": "Выполнение идёт. Результаты синхронизируются автоматически.",
+    "mobile.status.failed": "Предыдущий ход завершился ошибкой. Можно продолжить прямо отсюда.",
+    "mobile.status.queued": "Сессия в очереди. Оставайтесь на этом экране, и данные обновятся.",
+    "mobile.status.ready": "Сессия сейчас свободна. Отправьте следующее сообщение, когда будете готовы.",
+  },
+  th: {
+    "sidebar.filter.pinned": "ปักหมุด",
+    "sidebar.live": "ซิงก์สด",
+    "sidebar.reconnecting": "กำลังเชื่อมต่อใหม่",
+    "sidebar.polling": "สำรองด้วยการโพล",
+    "sidebar.offline": "ออฟไลน์",
+    "session.pin": "ปักหมุด",
+    "session.unpin": "เลิกปักหมุด",
+    "session.pinned": "ปักหมุดแล้ว",
+    "session.more": "เพิ่มเติม",
+    "session.quickContinue": "ต่อ",
+    "current.sync": "สถานะการซิงก์",
+    "current.lastReply": "คำตอบล่าสุด",
+    "current.noReply": "ยังไม่มีคำตอบสุดท้าย",
+    "prompt.pinFailed": "อัปเดตการปักหมุดไม่สำเร็จ",
+    "tabs.inbox": "เซสชัน",
+    "mobile.back": "ย้อนกลับ",
+    "mobile.openSettings": "การตั้งค่า",
+    "mobile.sessionListTitle": "เซสชัน",
+    "mobile.sessionListSubtitle": "เก็บไว้เฉพาะเธรดที่ต้องเดินหน้าต่อจริง ๆ ในตอนนี้",
+    "mobile.detailMeta": "{project} · {time}",
+    "mobile.emptyDetail": "เลือกเซสชันจากรายการก่อน",
+    "mobile.status.running": "กำลังทำงานอยู่ ผลลัพธ์จะซิงก์กลับมาให้อัตโนมัติ",
+    "mobile.status.failed": "รอบก่อนหน้าล้มเหลว คุณสามารถต่อจากตรงนี้ได้เลย",
+    "mobile.status.queued": "เข้าคิวแล้ว อยู่หน้านี้ไว้และระบบจะอัปเดตให้",
+    "mobile.status.ready": "ตอนนี้ว่างอยู่ ส่งข้อความถัดไปได้เมื่อพร้อม",
   },
 };
 
@@ -1677,6 +1845,15 @@ function syncRuntimeDecorations() {
     document.body.dataset.platform = state.runtime.platform;
   } else {
     delete document.body.dataset.platform;
+  }
+  const viewportMeta = document.getElementById("viewport-meta");
+  if (viewportMeta) {
+    viewportMeta.setAttribute(
+      "content",
+      isMobileShellClient()
+        ? "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        : "width=device-width, initial-scale=1.0, viewport-fit=cover",
+    );
   }
 }
 
@@ -2274,6 +2451,338 @@ function renderSidebarFilters() {
   `;
 }
 
+function mobileSessions() {
+  return filteredSessions();
+}
+
+function mobileStatusMessage(session) {
+  const status = session?.latest_run?.status || session?.status || "ready";
+  if (status === "running") {
+    return t("mobile.status.running");
+  }
+  if (status === "failed") {
+    return t("mobile.status.failed");
+  }
+  if (status === "queued") {
+    return t("mobile.status.queued");
+  }
+  return t("mobile.status.ready");
+}
+
+function renderMobileInbox() {
+  const sessions = mobileSessions();
+  return `
+    <section class="mobile-screen mobile-inbox">
+      <header class="mobile-page-head shell-subpanel">
+        <div>
+          <p class="eyebrow">${escapeHtml(t("sidebar.live"))}</p>
+          <h1>${escapeHtml(t("mobile.sessionListTitle"))}</h1>
+          <p class="subtle">${escapeHtml(t("mobile.sessionListSubtitle"))}</p>
+        </div>
+        <div class="mobile-page-actions">
+          ${syncStatusBadge()}
+          <button class="primary-button small-button" type="button" data-action="focus-new-session">${escapeHtml(t("sidebar.newSession"))}</button>
+          <button class="ghost-button small-button" type="button" data-action="set-mobile-tab" data-tab="settings">${escapeHtml(t("mobile.openSettings"))}</button>
+        </div>
+      </header>
+
+      ${renderSidebarFilters()}
+
+      <section class="composer-card shell-subpanel sidebar-new-session ${state.newSessionExpanded ? "" : "collapsed"}">
+        <div class="card-head">
+          <p class="eyebrow">${escapeHtml(t("newSession.eyebrow"))}</p>
+          <h3>${escapeHtml(t("newSession.title"))}</h3>
+          <p class="subtle">${escapeHtml(t("newSession.subtitle.mobile"))}</p>
+        </div>
+        <form id="new-session-form" class="composer-form">
+          ${renderNewSessionWorkspaceField()}
+          <label>
+            <span>${escapeHtml(t("newSession.initialPromptLabel"))}</span>
+            <textarea name="prompt" placeholder="${escapeHtml(t("newSession.initialPromptPlaceholder"))}">${escapeHtml(state.newSessionPrompt)}</textarea>
+          </label>
+          <div class="composer-actions">
+            <button class="ghost-button" type="button" data-action="cancel-new-session">${escapeHtml(t("newSession.collapse"))}</button>
+            <button class="primary-button" type="submit" ${state.busy ? "disabled" : ""}>${escapeHtml(state.busy ? t("newSession.creating") : t("newSession.createAndRun"))}</button>
+          </div>
+        </form>
+      </section>
+
+      <div class="mobile-session-list">
+        ${sessions.length
+          ? sessions
+              .map(
+                (session) => `
+                  <article class="mobile-session-card ${session.id === state.selectedSessionId ? "active" : ""} ${session.pinned ? "pinned" : ""}">
+                    <button class="mobile-session-main" type="button" data-session-id="${escapeHtml(session.id)}">
+                      <div class="mobile-session-topline">
+                        <strong>${escapeHtml(session.title || t("session.unnamed"))}</strong>
+                        ${statusBadge(session.status)}
+                      </div>
+                      <p class="mobile-session-summary">${escapeHtml(truncateText(sessionFinalReply(session) || sessionLatestPrompt(session) || session.cwd, 120))}</p>
+                      <div class="mobile-session-meta">
+                        <span>${escapeHtml(t("mobile.detailMeta", { project: basename(session.cwd) || t("session.projectUnknown"), time: formatRelative(session.updated_at) }))}</span>
+                      </div>
+                    </button>
+                    <div class="mobile-session-actions">
+                      <button class="ghost-button small-button" type="button" data-action="toggle-session-pin" data-session-id="${escapeHtml(session.id)}" data-pinned="${session.pinned ? "true" : "false"}">${escapeHtml(session.pinned ? t("session.unpin") : t("session.pin"))}</button>
+                      <button class="primary-button small-button" type="button" data-action="continue-session" data-session-id="${escapeHtml(session.id)}">${escapeHtml(t("session.quickContinue"))}</button>
+                    </div>
+                  </article>
+                `,
+              )
+              .join("")
+          : `<div class="empty-panel">${escapeHtml(t("workspace.noManaged"))}</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderSettingsSections() {
+  const languageOptions = state.system?.supported_ui_languages || UI_LANGUAGE_OPTIONS.map((item) => item.value);
+  return `
+    <section class="settings-summary-grid">
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.codexCli"))}</span>
+        <strong>${escapeHtml(state.system?.codex_cli_version || t("settings.notDetected"))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.defaultModel"))}</span>
+        <strong>${escapeHtml(state.system?.settings?.model || state.system?.default_model || t("settings.notConfigured"))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.reasoning"))}</span>
+        <strong>${escapeHtml(reasoningEffortLabel(state.system?.settings?.reasoning_effort || state.system?.default_reasoning_effort || "medium"))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.language"))}</span>
+        <strong>${escapeHtml(uiLanguageLabel(state.settingsUiLanguage || state.uiLanguage))}</strong>
+      </article>
+      ${renderTerminalSettingsSummary()}
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.defaultExecution"))}</span>
+        <strong>${escapeHtml(sandboxModeLabel(state.system?.settings?.sandbox_mode || state.system?.default_sandbox_mode || "workspace-write"))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.defaultApproval"))}</span>
+        <strong>${escapeHtml(approvalPolicyLabel(state.system?.settings?.approval_policy || state.system?.default_approval_policy || "never"))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.gitWriteEscalation"))}</span>
+        <strong>${escapeHtml(gitWriteEscalationLabel(state.settingsGitWriteEnabled))}</strong>
+      </article>
+      <article class="status-card">
+        <span>${escapeHtml(t("settings.gitWritePermissions"))}</span>
+        <strong>${escapeHtml(state.settingsGitWriteEnabled ? `${sandboxModeLabel(state.settingsGitWriteSandboxMode)} / ${approvalPolicyLabel(state.settingsGitWriteApprovalPolicy)}` : t("settings.followDefault"))}</strong>
+      </article>
+    </section>
+
+    <section class="composer-card settings-card shell-subpanel">
+      <div class="card-head">
+        <p class="eyebrow">${escapeHtml(t("execution.eyebrow"))}</p>
+        <h3>${escapeHtml(isMobileShellClient() ? t("execution.title.mobile") : t("execution.title.desktop"))}</h3>
+      </div>
+      <form id="settings-form" class="composer-form">
+        <label>
+          <span>${escapeHtml(t("settings.modelName"))}</span>
+          <input name="settings_model" value="${escapeHtml(state.settingsModel)}" placeholder="${escapeHtml(t("settings.modelPlaceholder"))}" />
+        </label>
+        <label>
+          <span>${escapeHtml(t("settings.language"))}</span>
+          <select name="ui_language">
+            ${languageOptions
+              .map(
+                (value) =>
+                  `<option value="${escapeHtml(value)}" ${state.settingsUiLanguage === value ? "selected" : ""}>${escapeHtml(uiLanguageLabel(value))}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+        <div>
+          <span class="field-title">${escapeHtml(t("settings.reasoning"))}</span>
+          <div class="effort-toggle">
+            ${(state.system?.reasoning_efforts || ["low", "medium", "high", "xhigh"])
+              .map(
+                (level) =>
+                  `<button class="effort-chip ${state.settingsEffort === level ? "active" : ""}" type="button" data-action="set-settings-effort" data-effort="${escapeHtml(level)}">${escapeHtml(reasoningEffortLabel(level))}</button>`,
+              )
+              .join("")}
+          </div>
+        </div>
+        ${renderTerminalSettingsField()}
+        <label>
+          <span>${escapeHtml(t("settings.sandbox"))}</span>
+          <select name="sandbox_mode">
+            ${(state.system?.sandbox_modes || ["read-only", "workspace-write", "danger-full-access"])
+              .map(
+                (value) =>
+                  `<option value="${escapeHtml(value)}" ${state.settingsSandboxMode === value ? "selected" : ""}>${escapeHtml(sandboxModeLabel(value))}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+        <label>
+          <span>${escapeHtml(t("settings.approval"))}</span>
+          <select name="approval_policy">
+            ${(state.system?.approval_policies || ["untrusted", "on-request", "never"])
+              .map(
+                (value) =>
+                  `<option value="${escapeHtml(value)}" ${state.settingsApprovalPolicy === value ? "selected" : ""}>${escapeHtml(approvalPolicyLabel(value))}</option>`,
+              )
+              .join("")}
+            </select>
+        </label>
+        <label class="toggle-field">
+          <div class="toggle-copy">
+            <span>${escapeHtml(t("settings.allowGitWrite"))}</span>
+            <p class="subtle">${
+              isMobileShellClient()
+                ? escapeHtml(t("settings.gitWriteHint.mobile"))
+                : escapeHtml(t("settings.gitWriteHint.desktop"))
+            }</p>
+          </div>
+          <input name="git_write_enabled" type="checkbox" ${state.settingsGitWriteEnabled ? "checked" : ""} />
+        </label>
+        <div class="settings-subgrid">
+          <label>
+            <span>${escapeHtml(t("settings.gitWriteSandbox"))}</span>
+            <select name="git_write_sandbox_mode" ${state.settingsGitWriteEnabled ? "" : "disabled"}>
+              ${(state.system?.sandbox_modes || ["read-only", "workspace-write", "danger-full-access"])
+                .map(
+                  (value) =>
+                    `<option value="${escapeHtml(value)}" ${state.settingsGitWriteSandboxMode === value ? "selected" : ""}>${escapeHtml(sandboxModeLabel(value))}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <label>
+            <span>${escapeHtml(t("settings.gitWriteApproval"))}</span>
+            <select name="git_write_approval_policy" ${state.settingsGitWriteEnabled ? "" : "disabled"}>
+              ${(state.system?.approval_policies || ["untrusted", "on-request", "never"])
+                .map(
+                  (value) =>
+                    `<option value="${escapeHtml(value)}" ${state.settingsGitWriteApprovalPolicy === value ? "selected" : ""}>${escapeHtml(approvalPolicyLabel(value))}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+        </div>
+        <p class="subtle">${
+          isMobileShellClient()
+            ? escapeHtml(t("settings.scopeHint.mobile"))
+            : escapeHtml(t("settings.scopeHint.desktop"))
+        }</p>
+        <div class="composer-actions">
+          <button class="primary-button" type="submit" ${state.settingsSaving ? "disabled" : ""}>${escapeHtml(state.settingsSaving ? t("settings.saving") : t("settings.save"))}</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="composer-card settings-card shell-subpanel">
+      <div class="card-head">
+        <p class="eyebrow">${escapeHtml(t("security.eyebrow"))}</p>
+        <h3>${escapeHtml(t("security.title"))}</h3>
+      </div>
+      <form id="password-form" class="composer-form">
+        <label>
+          <span>${escapeHtml(t("security.currentPassword"))}</span>
+          <input name="current_password" type="password" value="${escapeHtml(state.passwordCurrent)}" autocomplete="current-password" />
+        </label>
+        <label>
+          <span>${escapeHtml(t("security.newPassword"))}</span>
+          <input name="new_password" type="password" value="${escapeHtml(state.passwordNext)}" autocomplete="new-password" />
+        </label>
+        <label>
+          <span>${escapeHtml(t("security.confirmPassword"))}</span>
+          <input name="confirm_password" type="password" value="${escapeHtml(state.passwordConfirm)}" autocomplete="new-password" />
+        </label>
+        <div class="composer-actions">
+          <button class="ghost-button" type="button" data-action="clear-password-form">${escapeHtml(t("security.clear"))}</button>
+          <button class="primary-button" type="submit" ${state.passwordSaving ? "disabled" : ""}>${escapeHtml(state.passwordSaving ? t("security.saving") : t("security.save"))}</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+function renderMobileSettings() {
+  return `
+    <section class="mobile-screen mobile-settings">
+      <header class="mobile-page-head shell-subpanel">
+        <div>
+          <p class="eyebrow">${escapeHtml(t("settings.eyebrow"))}</p>
+          <h1>${escapeHtml(t("settings.title"))}</h1>
+          <p class="subtle">${escapeHtml(t("settings.subtitle"))}</p>
+        </div>
+        <div class="mobile-page-actions">
+          <button class="ghost-button small-button" type="button" data-action="set-mobile-tab" data-tab="inbox">${escapeHtml(t("mobile.back"))}</button>
+          <button class="ghost-button small-button" type="button" data-action="logout">${escapeHtml(t("settings.logout"))}</button>
+        </div>
+      </header>
+      <div class="mobile-settings-stack">
+        ${renderSettingsSections()}
+      </div>
+    </section>
+  `;
+}
+
+function renderMobileDetail() {
+  const session = selectedSession();
+  const latestRun = session?.latest_run || selectedActiveRun();
+  if (!session) {
+    return `
+      <section class="mobile-screen mobile-detail">
+        <header class="mobile-page-head shell-subpanel">
+          <button class="ghost-button small-button" type="button" data-action="set-mobile-tab" data-tab="inbox">${escapeHtml(t("mobile.back"))}</button>
+        </header>
+        <div class="empty-panel tall">${escapeHtml(t("mobile.emptyDetail"))}</div>
+      </section>
+    `;
+  }
+  return `
+    <section class="mobile-screen mobile-detail ${sessionFxClass(session.id, "focus")} ${sessionFxClass(session.id, "pin")}">
+      <header class="mobile-page-head shell-subpanel mobile-detail-head">
+        <div class="mobile-detail-head-row">
+          <button class="ghost-button small-button" type="button" data-action="set-mobile-tab" data-tab="inbox">${escapeHtml(t("mobile.back"))}</button>
+          <button class="ghost-button small-button" type="button" data-action="set-mobile-tab" data-tab="settings">${escapeHtml(t("mobile.openSettings"))}</button>
+        </div>
+        <div class="mobile-detail-copy">
+          <p class="eyebrow">${escapeHtml(t("conversation.eyebrow"))}</p>
+          <h1>${escapeHtml(session.title || t("session.unnamed"))}</h1>
+          <p class="subtle">${escapeHtml(t("mobile.detailMeta", { project: basename(session.cwd) || t("session.projectUnknown"), time: formatRelative(session.updated_at) }))}</p>
+        </div>
+        <div class="mobile-detail-head-row">
+          ${syncStatusBadge()}
+          ${statusBadge(session.status)}
+          <button class="ghost-button small-button" type="button" data-action="toggle-session-pin" data-session-id="${escapeHtml(session.id)}" data-pinned="${session.pinned ? "true" : "false"}">${escapeHtml(session.pinned ? t("session.unpin") : t("session.pin"))}</button>
+        </div>
+      </header>
+
+      <section class="mobile-status-banner shell-subpanel ${latestRun?.status || session.status}">
+        <strong>${escapeHtml(sessionStatusLabel(latestRun?.status || session.status))}</strong>
+        <p>${escapeHtml(mobileStatusMessage(session))}</p>
+      </section>
+
+      <section class="messages-panel shell-subpanel conversation-panel mobile-conversation-panel">
+        ${renderMessages()}
+        ${renderComposer()}
+      </section>
+    </section>
+  `;
+}
+
+function renderMobileApp() {
+  const screen = state.mobileTab === "settings" ? renderMobileSettings() : state.mobileTab === "detail" ? renderMobileDetail() : renderMobileInbox();
+  return `
+    <main class="screen workspace-shell mobile-shell-app">
+      ${screen}
+      <div class="mobile-tabs ${state.mobileTab === "detail" ? "hidden" : ""}">
+        <button class="mobile-tab-button ${state.mobileTab === "inbox" ? "active" : ""}" data-action="set-mobile-tab" data-tab="inbox">${escapeHtml(t("tabs.inbox"))}</button>
+        <button class="mobile-tab-button ${state.mobileTab === "settings" ? "active" : ""}" data-action="set-mobile-tab" data-tab="settings">${escapeHtml(t("tabs.settings"))}</button>
+      </div>
+    </main>
+  `;
+}
+
 function renderLogin() {
   document.getElementById("app").innerHTML = `
     <main class="screen auth-screen">
@@ -2611,7 +3120,6 @@ function renderCurrentSessionPane() {
 }
 
 function renderSettingsPane() {
-  const languageOptions = state.system?.supported_ui_languages || UI_LANGUAGE_OPTIONS.map((item) => item.value);
   return `
     <section class="settings-pane shell-panel ${state.mobileTab === "settings" ? "mobile-visible" : ""}">
       <header class="topbar panel-headline">
@@ -2621,196 +3129,49 @@ function renderSettingsPane() {
           <p class="subtle">${escapeHtml(t("settings.subtitle"))}</p>
         </div>
         <div class="topbar-actions">
+          ${isMobileShellClient() ? `<button class="ghost-button" data-action="set-mobile-tab" data-tab="inbox">${escapeHtml(t("mobile.back"))}</button>` : ""}
           <button class="ghost-button" data-action="logout">${escapeHtml(t("settings.logout"))}</button>
         </div>
       </header>
-
-      <section class="settings-summary-grid">
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.codexCli"))}</span>
-          <strong>${escapeHtml(state.system?.codex_cli_version || t("settings.notDetected"))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.defaultModel"))}</span>
-          <strong>${escapeHtml(state.system?.settings?.model || state.system?.default_model || t("settings.notConfigured"))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.reasoning"))}</span>
-          <strong>${escapeHtml(reasoningEffortLabel(state.system?.settings?.reasoning_effort || state.system?.default_reasoning_effort || "medium"))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.language"))}</span>
-          <strong>${escapeHtml(uiLanguageLabel(state.settingsUiLanguage || state.uiLanguage))}</strong>
-        </article>
-        ${renderTerminalSettingsSummary()}
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.defaultExecution"))}</span>
-          <strong>${escapeHtml(sandboxModeLabel(state.system?.settings?.sandbox_mode || state.system?.default_sandbox_mode || "workspace-write"))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.defaultApproval"))}</span>
-          <strong>${escapeHtml(approvalPolicyLabel(state.system?.settings?.approval_policy || state.system?.default_approval_policy || "never"))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.gitWriteEscalation"))}</span>
-          <strong>${escapeHtml(gitWriteEscalationLabel(state.settingsGitWriteEnabled))}</strong>
-        </article>
-        <article class="status-card">
-          <span>${escapeHtml(t("settings.gitWritePermissions"))}</span>
-          <strong>${escapeHtml(state.settingsGitWriteEnabled ? `${sandboxModeLabel(state.settingsGitWriteSandboxMode)} / ${approvalPolicyLabel(state.settingsGitWriteApprovalPolicy)}` : t("settings.followDefault"))}</strong>
-        </article>
-      </section>
-
-      <section class="composer-card settings-card shell-subpanel">
-        <div class="card-head">
-          <p class="eyebrow">${escapeHtml(t("execution.eyebrow"))}</p>
-          <h3>${escapeHtml(isMobileShellClient() ? t("execution.title.mobile") : t("execution.title.desktop"))}</h3>
-        </div>
-        <form id="settings-form" class="composer-form">
-          <label>
-            <span>${escapeHtml(t("settings.modelName"))}</span>
-            <input name="settings_model" value="${escapeHtml(state.settingsModel)}" placeholder="${escapeHtml(t("settings.modelPlaceholder"))}" />
-          </label>
-          <label>
-            <span>${escapeHtml(t("settings.language"))}</span>
-            <select name="ui_language">
-              ${languageOptions
-                .map(
-                  (value) =>
-                    `<option value="${escapeHtml(value)}" ${state.settingsUiLanguage === value ? "selected" : ""}>${escapeHtml(uiLanguageLabel(value))}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
-          <div>
-            <span class="field-title">${escapeHtml(t("settings.reasoning"))}</span>
-            <div class="effort-toggle">
-              ${(state.system?.reasoning_efforts || ["low", "medium", "high", "xhigh"])
-                .map(
-                  (level) =>
-                    `<button class="effort-chip ${state.settingsEffort === level ? "active" : ""}" type="button" data-action="set-settings-effort" data-effort="${escapeHtml(level)}">${escapeHtml(reasoningEffortLabel(level))}</button>`,
-                )
-                .join("")}
-            </div>
-          </div>
-          ${renderTerminalSettingsField()}
-          <label>
-            <span>${escapeHtml(t("settings.sandbox"))}</span>
-            <select name="sandbox_mode">
-              ${(state.system?.sandbox_modes || ["read-only", "workspace-write", "danger-full-access"])
-                .map(
-                  (value) =>
-                    `<option value="${escapeHtml(value)}" ${state.settingsSandboxMode === value ? "selected" : ""}>${escapeHtml(sandboxModeLabel(value))}</option>`,
-                )
-                .join("")}
-            </select>
-          </label>
-          <label>
-            <span>${escapeHtml(t("settings.approval"))}</span>
-            <select name="approval_policy">
-              ${(state.system?.approval_policies || ["untrusted", "on-request", "never"])
-                .map(
-                  (value) =>
-                    `<option value="${escapeHtml(value)}" ${state.settingsApprovalPolicy === value ? "selected" : ""}>${escapeHtml(approvalPolicyLabel(value))}</option>`,
-                )
-                .join("")}
-              </select>
-          </label>
-          <label class="toggle-field">
-            <div class="toggle-copy">
-              <span>${escapeHtml(t("settings.allowGitWrite"))}</span>
-              <p class="subtle">${
-                isMobileShellClient()
-                  ? escapeHtml(t("settings.gitWriteHint.mobile"))
-                  : escapeHtml(t("settings.gitWriteHint.desktop"))
-              }</p>
-            </div>
-            <input name="git_write_enabled" type="checkbox" ${state.settingsGitWriteEnabled ? "checked" : ""} />
-          </label>
-          <div class="settings-subgrid">
-            <label>
-              <span>${escapeHtml(t("settings.gitWriteSandbox"))}</span>
-              <select name="git_write_sandbox_mode" ${state.settingsGitWriteEnabled ? "" : "disabled"}>
-                ${(state.system?.sandbox_modes || ["read-only", "workspace-write", "danger-full-access"])
-                  .map(
-                    (value) =>
-                      `<option value="${escapeHtml(value)}" ${state.settingsGitWriteSandboxMode === value ? "selected" : ""}>${escapeHtml(sandboxModeLabel(value))}</option>`,
-                  )
-                  .join("")}
-              </select>
-            </label>
-            <label>
-              <span>${escapeHtml(t("settings.gitWriteApproval"))}</span>
-              <select name="git_write_approval_policy" ${state.settingsGitWriteEnabled ? "" : "disabled"}>
-                ${(state.system?.approval_policies || ["untrusted", "on-request", "never"])
-                  .map(
-                    (value) =>
-                      `<option value="${escapeHtml(value)}" ${state.settingsGitWriteApprovalPolicy === value ? "selected" : ""}>${escapeHtml(approvalPolicyLabel(value))}</option>`,
-                  )
-                  .join("")}
-              </select>
-            </label>
-          </div>
-          <p class="subtle">${
-            isMobileShellClient()
-              ? escapeHtml(t("settings.scopeHint.mobile"))
-              : escapeHtml(t("settings.scopeHint.desktop"))
-          }</p>
-          <div class="composer-actions">
-            <button class="primary-button" type="submit" ${state.settingsSaving ? "disabled" : ""}>${escapeHtml(state.settingsSaving ? t("settings.saving") : t("settings.save"))}</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="composer-card settings-card shell-subpanel">
-        <div class="card-head">
-          <p class="eyebrow">${escapeHtml(t("security.eyebrow"))}</p>
-          <h3>${escapeHtml(t("security.title"))}</h3>
-        </div>
-        <form id="password-form" class="composer-form">
-          <label>
-            <span>${escapeHtml(t("security.currentPassword"))}</span>
-            <input name="current_password" type="password" value="${escapeHtml(state.passwordCurrent)}" autocomplete="current-password" />
-          </label>
-          <label>
-            <span>${escapeHtml(t("security.newPassword"))}</span>
-            <input name="new_password" type="password" value="${escapeHtml(state.passwordNext)}" autocomplete="new-password" />
-          </label>
-          <label>
-            <span>${escapeHtml(t("security.confirmPassword"))}</span>
-            <input name="confirm_password" type="password" value="${escapeHtml(state.passwordConfirm)}" autocomplete="new-password" />
-          </label>
-          <div class="composer-actions">
-            <button class="ghost-button" type="button" data-action="clear-password-form">${escapeHtml(t("security.clear"))}</button>
-            <button class="primary-button" type="submit" ${state.passwordSaving ? "disabled" : ""}>${escapeHtml(state.passwordSaving ? t("security.saving") : t("security.save"))}</button>
-          </div>
-        </form>
-      </section>
+      ${renderSettingsSections()}
     </section>
   `;
 }
 
 function renderApp() {
-  document.getElementById("app").innerHTML = `
-    <main class="screen workspace-shell">
-      <div class="workspace-layout">
-        ${renderSidebar()}
-        ${renderCurrentSessionPane()}
-        ${renderSettingsPane()}
-      </div>
-      <div class="mobile-tabs">
-        <button class="mobile-tab-button ${state.mobileTab === "projects" ? "active" : ""}" data-action="set-mobile-tab" data-tab="projects">${escapeHtml(t("tabs.projects"))}</button>
-        <button class="mobile-tab-button ${state.mobileTab === "session" ? "active" : ""}" data-action="set-mobile-tab" data-tab="session">${escapeHtml(t("tabs.session"))}</button>
-        <button class="mobile-tab-button ${state.mobileTab === "settings" ? "active" : ""}" data-action="set-mobile-tab" data-tab="settings">${escapeHtml(t("tabs.settings"))}</button>
-      </div>
-    </main>
-  `;
+  document.getElementById("app").innerHTML = isMobileShellClient()
+    ? renderMobileApp()
+    : `
+      <main class="screen workspace-shell">
+        <div class="workspace-layout">
+          ${renderSidebar()}
+          ${renderCurrentSessionPane()}
+          ${renderSettingsPane()}
+        </div>
+        <div class="mobile-tabs">
+          <button class="mobile-tab-button ${state.mobileTab === "projects" ? "active" : ""}" data-action="set-mobile-tab" data-tab="projects">${escapeHtml(t("tabs.projects"))}</button>
+          <button class="mobile-tab-button ${state.mobileTab === "session" ? "active" : ""}" data-action="set-mobile-tab" data-tab="session">${escapeHtml(t("tabs.session"))}</button>
+          <button class="mobile-tab-button ${state.mobileTab === "settings" ? "active" : ""}" data-action="set-mobile-tab" data-tab="settings">${escapeHtml(t("tabs.settings"))}</button>
+        </div>
+      </main>
+    `;
 
   document.querySelectorAll(".thread-card-main[data-session-id]").forEach((element) => {
     element.addEventListener("click", async () => {
       const sessionId = element.getAttribute("data-session-id");
       if (sessionId) {
-        state.mobileTab = "session";
+        state.mobileTab = isMobileShellClient() ? "detail" : "session";
+        await selectSession(sessionId);
+      }
+    });
+  });
+
+  document.querySelectorAll(".mobile-session-main[data-session-id]").forEach((element) => {
+    element.addEventListener("click", async () => {
+      const sessionId = element.getAttribute("data-session-id");
+      if (sessionId) {
+        state.mobileTab = "detail";
+        render();
         await selectSession(sessionId);
       }
     });
@@ -2819,7 +3180,7 @@ function renderApp() {
   document.querySelectorAll("[data-action='focus-new-session']").forEach((element) => {
     element.addEventListener("click", () => {
       state.newSessionExpanded = true;
-      state.mobileTab = "projects";
+      state.mobileTab = isMobileShellClient() ? "inbox" : "projects";
       render();
       document.querySelector("#new-session-form textarea")?.focus();
     });
@@ -2833,7 +3194,7 @@ function renderApp() {
         state.expandedWorkspacePaths[workspacePath] = true;
       }
       state.newSessionExpanded = true;
-      state.mobileTab = "projects";
+      state.mobileTab = isMobileShellClient() ? "inbox" : "projects";
       render();
     });
   });
@@ -2852,8 +3213,9 @@ function renderApp() {
         return;
       }
       state.openSessionMenuId = null;
-      state.mobileTab = "session";
+      state.mobileTab = isMobileShellClient() ? "detail" : "session";
       state.shouldScrollSessionBottom = true;
+      render();
       await selectSession(sessionId);
       render();
       document.querySelector("#resume-form textarea")?.focus();
@@ -3014,8 +3376,8 @@ function renderApp() {
 
   document.querySelectorAll("[data-action='set-mobile-tab']").forEach((element) => {
     element.addEventListener("click", () => {
-      state.mobileTab = element.getAttribute("data-tab") || "session";
-      if (state.mobileTab === "session") {
+      state.mobileTab = element.getAttribute("data-tab") || "inbox";
+      if (state.mobileTab === "detail" || (!isMobileShellClient() && state.mobileTab === "session")) {
         state.shouldScrollSessionBottom = true;
       }
       render();
@@ -3096,7 +3458,7 @@ function renderApp() {
         });
         state.newSessionPrompt = "";
         state.newSessionExpanded = false;
-        state.mobileTab = "session";
+        state.mobileTab = isMobileShellClient() ? "detail" : "session";
         state.shouldScrollSessionBottom = true;
         await refreshSessions();
         await selectSession(data.session.id);
@@ -3258,7 +3620,7 @@ function render() {
     return;
   }
   renderApp();
-  if (state.shouldScrollSessionBottom && state.mobileTab === "session") {
+  if (state.shouldScrollSessionBottom && (state.mobileTab === "detail" || state.mobileTab === "session")) {
     state.shouldScrollSessionBottom = false;
     scrollCurrentSessionToBottom();
   }
@@ -3530,6 +3892,9 @@ async function bootstrap() {
   try {
     const me = await api("/api/auth/me");
     state.user = me.user;
+    if (isMobileShellClient() && !["inbox", "detail", "settings"].includes(state.mobileTab)) {
+      state.mobileTab = "inbox";
+    }
     const [system] = await Promise.all([api("/api/system/status"), refreshProjects(), refreshSessions()]);
     state.system = system;
     syncSettingsState();

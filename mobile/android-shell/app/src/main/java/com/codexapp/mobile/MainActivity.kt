@@ -58,6 +58,7 @@ class MainActivity : AppCompatActivity() {
             binding.webView.reload()
         }
         binding.changeServerButton.setOnClickListener { showServerConfigPanel() }
+        binding.openServerSettingsButton.setOnClickListener { showServerConfigPanel() }
         binding.cancelServerButton.setOnClickListener {
             if (currentBaseUri != null) {
                 hideServerConfigPanel()
@@ -116,10 +117,15 @@ class MainActivity : AppCompatActivity() {
             databaseEnabled = true
             cacheMode = WebSettings.LOAD_DEFAULT
             mediaPlaybackRequiresUserGesture = false
+            setSupportZoom(false)
             builtInZoomControls = false
             displayZoomControls = false
+            loadWithOverviewMode = false
+            useWideViewPort = false
+            textZoom = 100
             userAgentString = "${userAgentString} ${ShellConfig.userAgentSuffix}"
         }
+        webView.setInitialScale(100)
         webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
             binding.swipeRefresh.isEnabled = scrollY == 0 && binding.serverConfigPanel.visibility != View.VISIBLE
         }
@@ -169,6 +175,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentBaseUri = targetUri
+        updateServerQuickActions()
         hideServerConfigPanel()
         hideError()
         binding.webView.loadUrl(targetUri.toString())
@@ -184,6 +191,7 @@ class MainActivity : AppCompatActivity() {
         binding.serverUrlInput.error = null
         preferences.edit().putString(baseUrlPrefKey, parsed.toString()).apply()
         currentBaseUri = parsed
+        updateServerQuickActions()
         showLoading()
         loadHome()
     }
@@ -203,6 +211,7 @@ class MainActivity : AppCompatActivity() {
         binding.serverConfigPanel.visibility = View.VISIBLE
         binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
         binding.swipeRefresh.isEnabled = false
+        binding.serverQuickActions.visibility = View.GONE
         binding.errorPanel.visibility = View.GONE
         hideLoading()
     }
@@ -210,6 +219,13 @@ class MainActivity : AppCompatActivity() {
     private fun hideServerConfigPanel() {
         binding.serverConfigPanel.visibility = View.GONE
         binding.swipeRefresh.isEnabled = !binding.webView.canScrollVertically(-1)
+        updateServerQuickActions()
+    }
+
+    private fun updateServerQuickActions() {
+        binding.currentServerLabel.text = currentBaseUri?.host ?: getString(R.string.server_unknown)
+        val shouldShow = currentBaseUri != null && binding.serverConfigPanel.visibility != View.VISIBLE
+        binding.serverQuickActions.visibility = if (shouldShow) View.VISIBLE else View.GONE
     }
 
     private fun openExternal(uri: Uri) {

@@ -40,10 +40,17 @@ body {
     "Hiragino Sans GB",
     "Segoe UI",
     sans-serif;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
+}
+
+body.mobile-shell {
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 button,
@@ -806,6 +813,150 @@ textarea {
   display: none;
 }
 
+.mobile-shell-app {
+  display: grid;
+  gap: 16px;
+}
+
+.mobile-screen {
+  display: grid;
+  gap: 14px;
+  min-height: calc(100vh - 120px);
+  align-content: start;
+}
+
+.mobile-page-head {
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.mobile-page-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.mobile-detail-head-row,
+.mobile-session-topline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mobile-session-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.mobile-session-list {
+  display: grid;
+  gap: 12px;
+}
+
+.mobile-session-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(243, 248, 255, 0.9));
+  border: 1px solid rgba(22, 32, 51, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.mobile-session-card.active {
+  border-color: rgba(21, 94, 239, 0.22);
+  box-shadow: 0 18px 40px rgba(21, 94, 239, 0.12);
+}
+
+.mobile-session-card.pinned {
+  border-color: rgba(21, 94, 239, 0.18);
+}
+
+.mobile-session-main {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.mobile-session-main strong,
+.mobile-detail-copy h1 {
+  margin: 0;
+  font-size: 1.12rem;
+  line-height: 1.35;
+}
+
+.mobile-session-summary {
+  margin: 0;
+  color: #31415d;
+  line-height: 1.5;
+}
+
+.mobile-session-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.mobile-detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.mobile-detail-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.mobile-status-banner {
+  padding: 16px 18px;
+  display: grid;
+  gap: 6px;
+  border-radius: 24px;
+  border: 1px solid rgba(22, 32, 51, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.mobile-status-banner strong,
+.mobile-status-banner p {
+  margin: 0;
+}
+
+.mobile-status-banner.running {
+  background: linear-gradient(180deg, rgba(21, 94, 239, 0.1), rgba(255, 255, 255, 0.92));
+}
+
+.mobile-status-banner.failed {
+  background: linear-gradient(180deg, rgba(194, 59, 49, 0.09), rgba(255, 255, 255, 0.92));
+}
+
+.mobile-status-banner.queued {
+  background: linear-gradient(180deg, rgba(184, 104, 23, 0.09), rgba(255, 255, 255, 0.92));
+}
+
+.mobile-conversation-panel {
+  min-height: calc(100vh - 290px);
+}
+
+.mobile-settings-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.mobile-tabs.hidden {
+  display: none;
+}
+
 @media (max-width: 1180px) {
   .workspace-layout {
     grid-template-columns: 300px minmax(0, 1fr);
@@ -864,7 +1015,7 @@ textarea {
     right: calc(12px + var(--safe-right));
     bottom: calc(12px + var(--safe-bottom));
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     padding: 8px;
     border-radius: 24px;
@@ -893,5 +1044,18 @@ textarea {
   .thread-card-actions-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .mobile-page-actions,
+  .mobile-detail-head-row,
+  .mobile-session-topline,
+  .mobile-session-actions {
+    flex-wrap: wrap;
+  }
+
+  .mobile-status-banner,
+  .mobile-page-head,
+  .mobile-session-card {
+    border-radius: 22px;
   }
 }
