@@ -68,6 +68,7 @@ class MainActivity : AppCompatActivity() {
     private var currentBaseUri: Uri? = null
     private var returnToLoginAfterServerConfig = false
     private var currentScreen = Screen.INBOX
+    private var lastShellScreen = Screen.INBOX
     private var selectedSessionId: String? = null
     private var bootstrapData: JSONObject? = null
     private var selectedDetail: JSONObject? = null
@@ -202,7 +203,7 @@ class MainActivity : AppCompatActivity() {
             showLoading()
         }
         thread {
-            val result = performRequest(baseUri, "/api/mobile/bootstrap", "GET", null)
+            val result = requestBootstrap(baseUri)
             runOnUiThread {
                 when {
                     result.success -> {
@@ -257,7 +258,7 @@ class MainActivity : AppCompatActivity() {
             showLoading()
         }
         thread {
-            val result = performRequest(baseUri, "/api/mobile/sessions/$sessionId/detail", "GET", null)
+            val result = requestSessionDetail(baseUri, sessionId)
             runOnUiThread {
                 when {
                     result.success -> {
@@ -471,7 +472,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showShell() {
-        logsReturnSurface = OverlaySurface.SHELL
+        if (currentScreen == Screen.LOGS && logsReturnSurface != OverlaySurface.SHELL) {
+            currentScreen = lastShellScreen
+            logsReturnSurface = OverlaySurface.SHELL
+        }
         binding.nativeShellPanel.visibility = View.VISIBLE
         binding.errorPanel.visibility = View.GONE
         binding.serverConfigPanel.visibility = View.GONE
@@ -479,11 +483,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showScreen(screen: Screen) {
+        if (screen != Screen.LOGS) {
+            lastShellScreen = screen
+            logsReturnSurface = OverlaySurface.SHELL
+        }
         currentScreen = screen
         binding.inboxScreen.visibility = if (screen == Screen.INBOX) View.VISIBLE else View.GONE
         binding.detailScreen.visibility = if (screen == Screen.DETAIL) View.VISIBLE else View.GONE
         binding.settingsScreen.visibility = if (screen == Screen.SETTINGS) View.VISIBLE else View.GONE
         binding.logsScreen.visibility = if (screen == Screen.LOGS) View.VISIBLE else View.GONE
+        binding.shellTopbar.visibility = if (screen == Screen.LOGS && logsReturnSurface != OverlaySurface.SHELL) View.GONE else View.VISIBLE
         binding.inboxTabButton.isEnabled = screen != Screen.INBOX
         binding.settingsTabButton.isEnabled = screen != Screen.SETTINGS
         binding.logsTabButton.isEnabled = screen != Screen.LOGS
@@ -783,6 +792,7 @@ class MainActivity : AppCompatActivity() {
         loginBusy = isBusy
         binding.loginButton.isEnabled = !isBusy
         binding.loginChangeServerButton.isEnabled = !isBusy
+        binding.loginLogsButton.isEnabled = !isBusy
         binding.loginUsernameInput.isEnabled = !isBusy
         binding.loginPasswordInput.isEnabled = !isBusy
         binding.loginButton.text = getString(if (isBusy) R.string.login_loading else R.string.login_submit)
@@ -814,18 +824,42 @@ class MainActivity : AppCompatActivity() {
 
     private fun closeLogs() {
         when (logsReturnSurface) {
-            OverlaySurface.LOGIN -> showLoginPanel(binding.loginStatusText.text?.toString())
-            OverlaySurface.ERROR -> restoreErrorPanel()
-            OverlaySurface.SERVER_CONFIG -> showServerConfigPanel()
+            OverlaySurface.LOGIN -> {
+                currentScreen = lastShellScreen
+                logsReturnSurface = OverlaySurface.SHELL
+                showLoginPanel(binding.loginStatusText.text?.toString())
+            }
+
+            OverlaySurface.ERROR -> {
+                currentScreen = lastShellScreen
+                logsReturnSurface = OverlaySurface.SHELL
+                restoreErrorPanel()
+            }
+
+            OverlaySurface.SERVER_CONFIG -> {
+                currentScreen = lastShellScreen
+                logsReturnSurface = OverlaySurface.SHELL
+                restoreServerConfigPanel()
+            }
+
             OverlaySurface.SHELL -> {
                 if (bootstrapData != null) {
                     showShell()
-                    showScreen(Screen.INBOX)
+                    showScreen(lastShellScreen)
                 } else {
                     showLoginPanel()
                 }
             }
         }
+    }
+
+    private fun restoreServerConfigPanel() {
+        binding.serverConfigPanel.visibility = View.VISIBLE
+        binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
+        binding.loginPanel.visibility = View.GONE
+        binding.errorPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.GONE
+        hideLoading()
     }
 
     private fun restoreErrorPanel() {
@@ -896,20 +930,120 @@ class MainActivity : AppCompatActivity() {
             }
 
             val code = connection.responseCode
+            val responseMessage = connection.responseMessage.orEmpty()
             val responseText = runCatching {
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream ?: connection.inputStream
                 stream.bufferedReader().use { it.readText() }
             }.getOrDefault("")
             val root = runCatching { JSONObject(responseText) }.getOrNull()
             val data = root?.optJSONObject("data")
-            val message = root?.optJSONObject("error")?.optString("message").orEmpty()
+            val message = extractResponseMessage(code, responseMessage, responseText, root)
             val cookies = connection.headerFields["Set-Cookie"].orEmpty()
             connection.disconnect()
-            appendLog("HTTP $method $endpoint -> $code ${message.ifBlank { "OK" }}")
-            ApiResult(success = code in 200..299, code = code, data = data, userMessage = message, setCookies = cookies)
+            appendLog("HTTP $method $endpoint -> $code $message")
+            ApiResult(success = code in 200..299, code = code, data = data, userMessage = if (code in 200..299) "" else message, setCookies = cookies)
         }.getOrElse {
             appendLog("HTTP $method $endpoint -> NETWORK_ERROR ${it.message.orEmpty()}")
             ApiResult(success = false, code = -1, data = null, userMessage = getString(R.string.login_connection_failed), setCookies = emptyList())
+        }
+    }
+
+    private fun requestBootstrap(baseUri: Uri): ApiResult {
+        val mobileResult = performRequest(baseUri, "/api/mobile/bootstrap", "GET", null)
+        if (mobileResult.success || mobileResult.code != 404) {
+            return mobileResult
+        }
+        appendLog("未发现 /api/mobile/bootstrap，回退到旧版接口组合")
+        val systemResult = performRequest(baseUri, "/api/system/status", "GET", null)
+        if (!systemResult.success) {
+            return systemResult
+        }
+        val projectsResult = performRequest(baseUri, "/api/projects", "GET", null)
+        if (!projectsResult.success) {
+            return projectsResult
+        }
+        val sessionsResult = performRequest(baseUri, "/api/sessions", "GET", null)
+        if (!sessionsResult.success) {
+            return sessionsResult
+        }
+        appendLog("旧版 bootstrap 回退成功")
+        return ApiResult(
+            success = true,
+            code = 200,
+            data = JSONObject()
+                .put("user", JSONObject())
+                .put("projects", projectsResult.data.jsonArrayOrEmpty("items"))
+                .put("sessions", sessionsResult.data.jsonArrayOrEmpty("items"))
+                .put("system", systemResult.data ?: JSONObject()),
+            userMessage = "",
+            setCookies = emptyList(),
+        )
+    }
+
+    private fun requestSessionDetail(baseUri: Uri, sessionId: String): ApiResult {
+        val mobileResult = performRequest(baseUri, "/api/mobile/sessions/$sessionId/detail", "GET", null)
+        if (mobileResult.success || mobileResult.code != 404) {
+            return mobileResult
+        }
+        appendLog("未发现 /api/mobile/sessions/$sessionId/detail，回退到旧版会话接口")
+        val sessionResult = performRequest(baseUri, "/api/sessions/$sessionId", "GET", null)
+        if (!sessionResult.success) {
+            return sessionResult
+        }
+        val messagesResult = performRequest(baseUri, "/api/sessions/$sessionId/messages", "GET", null)
+        if (!messagesResult.success) {
+            return messagesResult
+        }
+        val runsResult = performRequest(baseUri, "/api/sessions/$sessionId/runs", "GET", null)
+        if (!runsResult.success) {
+            return runsResult
+        }
+        appendLog("旧版会话详情回退成功：$sessionId")
+        return ApiResult(
+            success = true,
+            code = 200,
+            data = JSONObject()
+                .put("session", sessionResult.data?.optJSONObject("session") ?: JSONObject())
+                .put("messages", messagesResult.data.jsonArrayOrEmpty("items"))
+                .put("runs", runsResult.data.jsonArrayOrEmpty("items")),
+            userMessage = "",
+            setCookies = emptyList(),
+        )
+    }
+
+    private fun extractResponseMessage(code: Int, responseMessage: String, responseText: String, root: JSONObject?): String {
+        val errorMessage = root?.optJSONObject("error")?.optString("message").orEmpty()
+        if (errorMessage.isNotBlank()) {
+            return errorMessage
+        }
+        val topLevelMessage = root?.optString("message").orEmpty()
+        if (topLevelMessage.isNotBlank()) {
+            return topLevelMessage
+        }
+        when (val detail = root?.opt("detail")) {
+            is String -> if (detail.isNotBlank()) return detail
+            is JSONObject -> {
+                val detailMessage = detail.optString("message").ifBlank { detail.optString("detail") }
+                if (detailMessage.isNotBlank()) {
+                    return detailMessage
+                }
+            }
+
+            is JSONArray -> {
+                val firstItem = detail.optJSONObject(0)
+                val detailMessage = firstItem?.optString("msg").orEmpty()
+                if (detailMessage.isNotBlank()) {
+                    return detailMessage
+                }
+            }
+        }
+        if (code !in 200..299 && responseText.isNotBlank() && !responseText.trimStart().startsWith("<")) {
+            return responseText.lineSequence().first().trim().take(120).ifBlank { responseMessage.ifBlank { "HTTP $code" } }
+        }
+        return if (code in 200..299) {
+            responseMessage.ifBlank { "OK" }
+        } else {
+            responseMessage.ifBlank { "HTTP $code" }
         }
     }
 
@@ -935,6 +1069,10 @@ class MainActivity : AppCompatActivity() {
                 optJSONObject(index)?.let(::add)
             }
         }
+    }
+
+    private fun JSONObject?.jsonArrayOrEmpty(name: String): JSONArray {
+        return this?.optJSONArray(name) ?: JSONArray()
     }
 
     private fun dp(value: Int): Int {
