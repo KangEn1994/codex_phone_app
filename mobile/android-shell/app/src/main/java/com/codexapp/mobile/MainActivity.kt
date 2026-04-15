@@ -13,11 +13,13 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
+import android.widget.EditText
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.addCallback
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.codexapp.mobile.databinding.ActivityMainBinding
 import org.json.JSONArray
@@ -158,11 +160,19 @@ class MainActivity : AppCompatActivity() {
         binding.logsTabButton.setOnClickListener { showScreen(Screen.LOGS) }
         binding.inboxRefreshButton.setOnClickListener { refreshBootstrap() }
         binding.newSessionCreateButton.setOnClickListener { createSession() }
+        binding.newSessionWorkspaceInput.setOnClickListener { binding.newSessionWorkspaceInput.showDropDown() }
+        binding.newSessionWorkspaceInput.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                binding.newSessionWorkspaceInput.showDropDown()
+            }
+        }
 
         binding.detailBackButton.setOnClickListener { showScreen(Screen.INBOX) }
         binding.detailSettingsButton.setOnClickListener { showScreen(Screen.SETTINGS) }
         binding.detailRefreshButton.setOnClickListener { refreshSelectedSessionDetail() }
         binding.detailPinButton.setOnClickListener { toggleSelectedSessionPin() }
+        binding.detailRenameButton.setOnClickListener { selectedSession()?.let(::promptRenameSession) }
+        binding.detailDeleteButton.setOnClickListener { selectedSession()?.let(::confirmDeleteSession) }
         binding.detailSendButton.setOnClickListener { sendPromptToSelectedSession() }
 
         binding.settingsRefreshButton.setOnClickListener { refreshBootstrap() }
@@ -287,13 +297,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun createSession() {
         val baseUri = currentBaseUri ?: return showServerConfigPanel()
-        val workspaces = projectPaths()
-        if (workspaces.isEmpty()) {
-            showError(getString(R.string.native_workspace_required))
-            return
-        }
-        val workspaceIndex = binding.newSessionWorkspaceSpinner.selectedItemPosition.coerceAtLeast(0)
-        val cwd = workspaces.getOrNull(workspaceIndex).orEmpty()
+        val cwd = binding.newSessionWorkspaceInput.text?.toString().orEmpty().trim()
         if (cwd.isBlank()) {
             showError(getString(R.string.native_workspace_required))
             return
@@ -311,6 +315,7 @@ class MainActivity : AppCompatActivity() {
                 when {
                     result.success -> {
                         binding.newSessionPromptInput.setText("")
+                        binding.newSessionWorkspaceInput.dismissDropDown()
                         selectedSessionId = result.data?.optJSONObject("session")?.optString("id")
                         appendLog("创建会话成功：${selectedSessionId.orEmpty()}")
                         currentScreen = Screen.DETAIL
@@ -508,19 +513,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun renderInbox() {
-        val workspaceOptions = projectLabels()
-        binding.newSessionWorkspaceSpinner.adapter =
-            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, workspaceOptions.ifEmpty { listOf(getString(R.string.native_workspace_required)) })
+        val workspacePaths = projectPaths()
+        binding.newSessionWorkspaceInput.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, workspacePaths),
+        )
+        if (binding.newSessionWorkspaceInput.text?.toString().isNullOrBlank()) {
+            binding.newSessionWorkspaceInput.setText(workspacePaths.firstOrNull().orEmpty(), false)
+        }
 
         binding.sessionsListContainer.removeAllViews()
-        val items = sessions()
-        if (items.isEmpty()) {
+        val groups = visibleWorkspaceGroups()
+        if (groups.isEmpty()) {
             binding.sessionsListContainer.addView(emptyStateView(getString(R.string.native_empty_sessions)))
             return
         }
 
-        items.forEach { session ->
-            binding.sessionsListContainer.addView(sessionCard(session))
+        groups.forEach { group ->
+            binding.sessionsListContainer.addView(workspaceGroupCard(group))
         }
     }
 
@@ -621,7 +630,7 @@ class MainActivity : AppCompatActivity() {
         }.apply {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         })
-        actions.addView(actionButton(getString(R.string.native_send_prompt)) {
+        actions.addView(actionButton(getString(R.string.native_open_session)) {
             selectedSessionId = session.optString("id")
             currentScreen = Screen.DETAIL
             refreshSelectedSessionDetail()
@@ -632,7 +641,56 @@ class MainActivity : AppCompatActivity() {
         })
         card.addView(actions)
 
+        val management = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(10), 0, 0)
+        }
+        management.addView(actionButton(getString(R.string.native_rename)) {
+            promptRenameSession(session)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        management.addView(actionButton(getString(R.string.native_delete)) {
+            confirmDeleteSession(session)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(10)
+            }
+        })
+        card.addView(management)
+
         return card
+    }
+
+    private fun workspaceGroupCard(group: WorkspaceGroup): View {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedCard("#EAF0F8")
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(14)
+            }
+        }
+
+        val workspace = group.workspace
+        val path = workspace.optString("path")
+        val title = workspace.optString("name").ifBlank { path.substringAfterLast('/').ifBlank { path } }
+        container.addView(textView(title, 18f, Typeface.BOLD, "#162033"))
+        container.addView(textView(path, 13f, Typeface.NORMAL, "#60708E").apply {
+            setPadding(0, dp(6), 0, 0)
+        })
+        container.addView(textView(getString(R.string.native_project_group_count, group.sessions.size, group.totalSessions), 13f, Typeface.NORMAL, "#44618E").apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+        container.setOnClickListener {
+            binding.newSessionWorkspaceInput.setText(path, false)
+            binding.newSessionWorkspaceInput.setSelection(binding.newSessionWorkspaceInput.text?.length ?: 0)
+        }
+
+        group.sessions.forEach { session ->
+            container.addView(sessionCard(session))
+        }
+        return container
     }
 
     private fun messageCard(message: JSONObject): View {
@@ -693,6 +751,10 @@ class MainActivity : AppCompatActivity() {
         return bootstrapData?.optJSONArray("sessions").toJsonObjects()
     }
 
+    private fun projects(): List<JSONObject> {
+        return bootstrapData?.optJSONArray("projects").toJsonObjects()
+    }
+
     private fun selectedSession(): JSONObject? {
         val sessionId = selectedSessionId ?: return null
         return sessions().firstOrNull { it.optString("id") == sessionId }
@@ -700,13 +762,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun projectPaths(): List<String> {
-        return bootstrapData?.optJSONArray("projects").toJsonObjects().map { it.optString("path") }.filter { it.isNotBlank() }
-    }
-
-    private fun projectLabels(): List<String> {
-        return bootstrapData?.optJSONArray("projects").toJsonObjects().map { workspace ->
-            "${workspace.optString("name")} • ${workspace.optString("path")}"
-        }.filter { it.isNotBlank() }
+        return projects().map { it.optString("path") }.filter { it.isNotBlank() }
     }
 
     private fun sessionSummary(session: JSONObject): String {
@@ -732,6 +788,126 @@ class MainActivity : AppCompatActivity() {
             "cancelled" -> "已取消"
             else -> "空闲"
         }
+    }
+
+    private fun promptRenameSession(session: JSONObject) {
+        val sessionId = session.optString("id")
+        if (sessionId.isBlank()) {
+            return
+        }
+        val currentTitle = displaySessionTitle(session)
+        val input = EditText(this).apply {
+            setText(currentTitle)
+            setSelection(text?.length ?: 0)
+            isSingleLine = true
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.native_alias_dialog_title)
+            .setView(input)
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.native_rename, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val nextTitle = input.text?.toString().orEmpty().trim()
+                if (nextTitle.isBlank()) {
+                    input.error = getString(R.string.native_alias_empty)
+                    return@setOnClickListener
+                }
+                if (nextTitle == currentTitle) {
+                    dialog.dismiss()
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                renameSession(sessionId, nextTitle)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun renameSession(sessionId: String, title: String) {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        appendLog("修改会话别名：$sessionId -> $title")
+        showLoading()
+        thread {
+            val payload = JSONObject().put("title", title).toString()
+            val result = performRequest(baseUri, "/api/sessions/$sessionId", "PATCH", payload)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        appendLog("会话改名成功：$sessionId")
+                        refreshBootstrap(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        appendLog("会话改名返回 401：$sessionId")
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        appendLog("会话改名失败：$sessionId ${result.userMessage.ifBlank { "未知错误" }}")
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun confirmDeleteSession(session: JSONObject) {
+        val sessionId = session.optString("id")
+        if (sessionId.isBlank()) {
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.native_delete_confirm_title)
+            .setMessage(getString(R.string.native_delete_confirm_message, displaySessionTitle(session)))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.native_delete) { _, _ ->
+                deleteSession(sessionId)
+            }
+            .show()
+    }
+
+    private fun deleteSession(sessionId: String) {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        appendLog("删除会话：$sessionId")
+        showLoading()
+        thread {
+            val result = performRequest(baseUri, "/api/sessions/$sessionId", "DELETE", null)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        appendLog("删除会话成功：$sessionId")
+                        if (selectedSessionId == sessionId) {
+                            selectedSessionId = null
+                            selectedDetail = null
+                            currentScreen = Screen.INBOX
+                        }
+                        refreshBootstrap(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        appendLog("删除会话返回 401：$sessionId")
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        appendLog("删除会话失败：$sessionId ${result.userMessage.ifBlank { "未知错误" }}")
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun displaySessionTitle(session: JSONObject): String {
+        return session.optString("title").ifBlank { session.optString("id") }
     }
 
     private fun saveServerAndContinue() {
@@ -1067,6 +1243,56 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun visibleWorkspaceGroups(): List<WorkspaceGroup> {
+        val projects = projects()
+        val currentNewSessionCwd = normalizePath(binding.newSessionWorkspaceInput.text?.toString().orEmpty())
+        val sessionMap = mutableMapOf<String, MutableList<JSONObject>>()
+        sessions().forEach { session ->
+            val workspace = workspaceForCwd(session.optString("cwd")) ?: return@forEach
+            val path = workspace.optString("path")
+            if (path.isBlank()) {
+                return@forEach
+            }
+            sessionMap.getOrPut(path) { mutableListOf() }.add(session)
+        }
+        return projects.mapNotNull { workspace ->
+            val path = workspace.optString("path")
+            val groupedSessions = sessionMap[path].orEmpty()
+            val totalSessions = sessions().count { workspaceForCwd(it.optString("cwd"))?.optString("path") == path }
+            if (groupedSessions.isEmpty() && (currentNewSessionCwd.isBlank() || !currentNewSessionCwd.startsWith(normalizePath(path)))) {
+                null
+            } else {
+                WorkspaceGroup(workspace = workspace, sessions = groupedSessions, totalSessions = totalSessions)
+            }
+        }
+    }
+
+    private fun workspaceForCwd(cwd: String): JSONObject? {
+        val current = normalizePath(cwd)
+        var bestMatch: JSONObject? = null
+        projects().forEach { workspace ->
+            val base = normalizePath(workspace.optString("path"))
+            if (base.isBlank()) {
+                return@forEach
+            }
+            if (current == base || current.startsWith("$base/")) {
+                val bestPath = normalizePath(bestMatch?.optString("path").orEmpty())
+                if (bestMatch == null || base.length > bestPath.length) {
+                    bestMatch = workspace
+                }
+            }
+        }
+        return bestMatch
+    }
+
+    private fun normalizePath(value: String): String {
+        var normalized = value.trim().replace('\\', '/')
+        while (normalized.length > 1 && normalized.endsWith("/")) {
+            normalized = normalized.dropLast(1)
+        }
+        return normalized
+    }
+
     private fun JSONArray?.toJsonObjects(): List<JSONObject> {
         if (this == null) {
             return emptyList()
@@ -1118,5 +1344,11 @@ class MainActivity : AppCompatActivity() {
         val data: JSONObject?,
         val userMessage: String,
         val setCookies: List<String>,
+    )
+
+    private data class WorkspaceGroup(
+        val workspace: JSONObject,
+        val sessions: List<JSONObject>,
+        val totalSessions: Int,
     )
 }
