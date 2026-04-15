@@ -1,198 +1,664 @@
 package com.codexapp.mobile
 
-import android.annotation.SuppressLint
-import android.content.Intent
 import android.content.SharedPreferences
-import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
-import androidx.webkit.WebViewFeature
-import androidx.webkit.WebViewCompat
 import com.codexapp.mobile.databinding.ActivityMainBinding
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.OutputStreamWriter
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     companion object {
         private const val prefsName = "codexapp.mobile"
         private const val baseUrlPrefKey = "base_web_url"
+        private const val pollIntervalMs = 7000L
+    }
+
+    private enum class Screen {
+        INBOX,
+        DETAIL,
+        SETTINGS,
     }
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var preferences: SharedPreferences
-    private var currentBaseUri: Uri? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
+    private val handler = Handler(Looper.getMainLooper())
+    private val pollRunnable = Runnable {
+        if (binding.nativeShellPanel.visibility == View.VISIBLE) {
+            if (currentScreen == Screen.DETAIL && !selectedSessionId.isNullOrBlank()) {
+                refreshSelectedSessionDetail(showLoadingIndicator = false)
+            } else {
+                refreshBootstrap(showLoadingIndicator = false)
+            }
+        }
+        schedulePolling()
+    }
+
+    private var currentBaseUri: Uri? = null
+    private var returnToLoginAfterServerConfig = false
+    private var currentScreen = Screen.INBOX
+    private var selectedSessionId: String? = null
+    private var bootstrapData: JSONObject? = null
+    private var selectedDetail: JSONObject? = null
+    private var loginBusy = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         preferences = getSharedPreferences(prefsName, MODE_PRIVATE)
 
+        CookieManager.getInstance().setAcceptCookie(true)
+
         onBackPressedDispatcher.addCallback(this) {
-            if (binding.serverConfigPanel.visibility == View.VISIBLE) {
-                if (currentBaseUri != null) {
-                    hideServerConfigPanel()
-                } else {
-                    finish()
+            when {
+                binding.serverConfigPanel.visibility == View.VISIBLE -> {
+                    if (currentBaseUri != null) {
+                        dismissServerConfigPanel()
+                    } else {
+                        finish()
+                    }
                 }
-            } else if (binding.webView.canGoBack()) {
-                binding.webView.goBack()
-            } else {
-                finish()
+
+                binding.loginPanel.visibility == View.VISIBLE -> finish()
+                binding.detailScreen.visibility == View.VISIBLE -> showScreen(Screen.INBOX)
+                else -> finish()
             }
         }
 
-        binding.retryButton.setOnClickListener {
-            showLoading()
-            binding.webView.reload()
-        }
+        bindActions()
+
+        configuredBaseUri()?.let {
+            currentBaseUri = it
+            tryBootstrapFromStoredSession()
+        } ?: showServerConfigPanel()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        schedulePolling()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        stopPolling()
+    }
+
+    private fun bindActions() {
+        binding.retryButton.setOnClickListener { retryVisibleState() }
         binding.changeServerButton.setOnClickListener { showServerConfigPanel() }
+
+        binding.connectButton.setOnClickListener { saveServerAndContinue() }
         binding.cancelServerButton.setOnClickListener {
             if (currentBaseUri != null) {
-                hideServerConfigPanel()
+                dismissServerConfigPanel()
             }
         }
-        binding.connectButton.setOnClickListener { saveServerAndLoad() }
         binding.serverUrlInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-                saveServerAndLoad()
+                saveServerAndContinue()
                 true
             } else {
                 false
             }
         }
-        configureSwipeRefresh(binding.swipeRefresh)
 
-        configureWebView(binding.webView)
-        val initialUri = configuredBaseUri()
-        if (initialUri == null) {
-            showServerConfigPanel()
-        } else {
-            currentBaseUri = initialUri
-            loadHome()
+        binding.loginButton.setOnClickListener { submitNativeLogin() }
+        binding.loginChangeServerButton.setOnClickListener { showServerConfigPanel() }
+        binding.loginPasswordInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                submitNativeLogin()
+                true
+            } else {
+                false
+            }
+        }
+
+        binding.inboxTabButton.setOnClickListener { showScreen(Screen.INBOX) }
+        binding.settingsTabButton.setOnClickListener { showScreen(Screen.SETTINGS) }
+        binding.inboxRefreshButton.setOnClickListener { refreshBootstrap() }
+        binding.newSessionCreateButton.setOnClickListener { createSession() }
+
+        binding.detailBackButton.setOnClickListener { showScreen(Screen.INBOX) }
+        binding.detailSettingsButton.setOnClickListener { showScreen(Screen.SETTINGS) }
+        binding.detailRefreshButton.setOnClickListener { refreshSelectedSessionDetail() }
+        binding.detailPinButton.setOnClickListener { toggleSelectedSessionPin() }
+        binding.detailSendButton.setOnClickListener { sendPromptToSelectedSession() }
+
+        binding.settingsRefreshButton.setOnClickListener { refreshBootstrap() }
+        binding.settingsChangeServerButton.setOnClickListener { showServerConfigPanel() }
+        binding.settingsLogoutButton.setOnClickListener { logout() }
+    }
+
+    private fun retryVisibleState() {
+        when {
+            binding.loginPanel.visibility == View.VISIBLE -> tryBootstrapFromStoredSession()
+            binding.detailScreen.visibility == View.VISIBLE && !selectedSessionId.isNullOrBlank() -> refreshSelectedSessionDetail()
+            else -> refreshBootstrap()
         }
     }
 
-    private fun configureSwipeRefresh(refreshLayout: SwipeRefreshLayout) {
-        refreshLayout.setColorSchemeColors(
-            getColor(android.R.color.holo_blue_dark),
-            getColor(android.R.color.holo_blue_light),
-        )
-        refreshLayout.setProgressBackgroundColorSchemeColor(getColor(android.R.color.white))
-        refreshLayout.setOnChildScrollUpCallback { _, _ ->
-            binding.webView.canScrollVertically(-1)
-        }
-        refreshLayout.setOnRefreshListener {
-            hideError()
-            binding.webView.reload()
-        }
+    private fun tryBootstrapFromStoredSession() {
+        showLoginPanel()
+        setLoginBusy(true, getString(R.string.login_loading))
+        refreshBootstrap(showLoadingIndicator = false)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun configureWebView(webView: WebView) {
-        val cookieManager = CookieManager.getInstance()
-        cookieManager.setAcceptCookie(true)
-        cookieManager.setAcceptThirdPartyCookies(webView, true)
-        webView.addJavascriptInterface(ShellBridge(), "AndroidShell")
-
-        if (ShellConfig.enableWebDebug && WebViewFeature.isFeatureSupported(WebViewFeature.START_SAFE_BROWSING)) {
-            WebViewCompat.startSafeBrowsing(this) {}
-        }
-        WebView.setWebContentsDebuggingEnabled(ShellConfig.enableWebDebug)
-
-        with(webView.settings) {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            cacheMode = WebSettings.LOAD_DEFAULT
-            mediaPlaybackRequiresUserGesture = false
-            setSupportZoom(false)
-            builtInZoomControls = false
-            displayZoomControls = false
-            loadWithOverviewMode = false
-            useWideViewPort = false
-            textZoom = 100
-            userAgentString = "${userAgentString} ${ShellConfig.userAgentSuffix}"
-        }
-        webView.setInitialScale(100)
-        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            binding.swipeRefresh.isEnabled = scrollY == 0 && binding.serverConfigPanel.visibility != View.VISIBLE
-        }
-
-        webView.webChromeClient = WebChromeClient()
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                val uri = request?.url ?: return true
-                return when (NavigationPolicy.evaluate(uri, currentBaseUri)) {
-                    NavigationDecision.InApp -> false
-                    NavigationDecision.External -> {
-                        openExternal(uri)
-                        true
-                    }
-                    NavigationDecision.Blocked -> {
-                        showError("当前链接不允许在应用内打开。")
-                        true
-                    }
-                }
-            }
-
-            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                showLoading()
-            }
-
-            override fun onPageFinished(view: WebView?, url: String?) {
-                hideError()
-                hideLoading()
-            }
-
-            override fun onReceivedError(
-                view: WebView?,
-                request: WebResourceRequest?,
-                error: WebResourceError?,
-            ) {
-                if (request?.isForMainFrame == true) {
-                    showError(error?.description?.toString() ?: getString(R.string.error_message_default))
-                }
-            }
-        }
-    }
-
-    private fun loadHome() {
-        val targetUri = currentBaseUri ?: configuredBaseUri()
-        if (targetUri == null) {
+    private fun refreshBootstrap(showLoadingIndicator: Boolean = true) {
+        val baseUri = currentBaseUri
+        if (baseUri == null) {
             showServerConfigPanel()
             return
         }
-        currentBaseUri = targetUri
-        hideServerConfigPanel()
-        hideError()
-        binding.webView.loadUrl(targetUri.toString())
+        if (showLoadingIndicator) {
+            showLoading()
+        }
+        thread {
+            val result = performRequest(baseUri, "/api/mobile/bootstrap", "GET", null)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        setLoginBusy(false)
+                        bootstrapData = result.data
+                        if (selectedSessionId.isNullOrBlank() || sessions().none { it.optString("id") == selectedSessionId }) {
+                            selectedSessionId = sessions().firstOrNull()?.optString("id")
+                        }
+                        renderInbox()
+                        renderSettings()
+                        showShell()
+                        if (currentScreen == Screen.DETAIL && !selectedSessionId.isNullOrBlank()) {
+                            refreshSelectedSessionDetail(showLoadingIndicator = false)
+                        } else {
+                            showScreen(currentScreen)
+                            hideLoading()
+                        }
+                    }
+
+                    result.code == 401 -> {
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        hideLoading()
+                        if (binding.nativeShellPanel.visibility == View.VISIBLE) {
+                            showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                        } else {
+                            setLoginBusy(false)
+                            showLoginPanel(result.userMessage.ifBlank { getString(R.string.login_connection_failed) })
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    private fun saveServerAndLoad() {
+    private fun refreshSelectedSessionDetail(showLoadingIndicator: Boolean = true) {
+        val baseUri = currentBaseUri
+        val sessionId = selectedSessionId
+        if (baseUri == null || sessionId.isNullOrBlank()) {
+            showScreen(Screen.INBOX)
+            return
+        }
+        if (showLoadingIndicator) {
+            showLoading()
+        }
+        thread {
+            val result = performRequest(baseUri, "/api/mobile/sessions/$sessionId/detail", "GET", null)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        selectedDetail = result.data
+                        renderDetail()
+                        showScreen(Screen.DETAIL)
+                        hideLoading()
+                    }
+
+                    result.code == 401 -> {
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun createSession() {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        val workspaces = projectPaths()
+        if (workspaces.isEmpty()) {
+            showError(getString(R.string.native_workspace_required))
+            return
+        }
+        val workspaceIndex = binding.newSessionWorkspaceSpinner.selectedItemPosition.coerceAtLeast(0)
+        val cwd = workspaces.getOrNull(workspaceIndex).orEmpty()
+        if (cwd.isBlank()) {
+            showError(getString(R.string.native_workspace_required))
+            return
+        }
+        val prompt = binding.newSessionPromptInput.text?.toString().orEmpty()
+        showLoading()
+        thread {
+            val payload = JSONObject()
+                .put("cwd", cwd)
+                .put("prompt", prompt)
+                .toString()
+            val result = performRequest(baseUri, "/api/sessions", "POST", payload)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        binding.newSessionPromptInput.setText("")
+                        selectedSessionId = result.data?.optJSONObject("session")?.optString("id")
+                        currentScreen = Screen.DETAIL
+                        refreshBootstrap(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun sendPromptToSelectedSession() {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        val sessionId = selectedSessionId ?: return
+        val prompt = binding.detailPromptInput.text?.toString().orEmpty().trim()
+        if (prompt.isBlank()) {
+            return
+        }
+        showLoading()
+        thread {
+            val payload = JSONObject().put("prompt", prompt).toString()
+            val result = performRequest(baseUri, "/api/sessions/$sessionId/runs", "POST", payload)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        binding.detailPromptInput.setText("")
+                        refreshSelectedSessionDetail(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun toggleSelectedSessionPin() {
+        val session = selectedSession() ?: return
+        toggleSessionPin(session.optString("id"), !session.optBoolean("pinned"))
+    }
+
+    private fun toggleSessionPin(sessionId: String, nextPinned: Boolean) {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        showLoading()
+        thread {
+            val payload = JSONObject().put("pinned", nextPinned).toString()
+            val result = performRequest(baseUri, "/api/sessions/$sessionId", "PATCH", payload)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        refreshBootstrap(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        hideLoading()
+                        clearSessionCookies()
+                        showLoginPanel(getString(R.string.error_message_sign_in_required))
+                    }
+
+                    else -> {
+                        hideLoading()
+                        showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun submitNativeLogin() {
+        val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        val username = binding.loginUsernameInput.text?.toString()?.trim().orEmpty()
+        val password = binding.loginPasswordInput.text?.toString().orEmpty()
+        if (username.isBlank()) {
+            binding.loginUsernameInput.error = getString(R.string.login_username_required)
+            return
+        }
+        if (password.isBlank()) {
+            binding.loginPasswordInput.error = getString(R.string.login_password_required)
+            return
+        }
+        binding.loginUsernameInput.error = null
+        binding.loginPasswordInput.error = null
+        setLoginBusy(true, getString(R.string.login_loading))
+        thread {
+            val payload = JSONObject()
+                .put("username", username)
+                .put("password", password)
+                .toString()
+            val result = performRequest(baseUri, "/api/auth/login", "POST", payload)
+            runOnUiThread {
+                when {
+                    result.success -> {
+                        applyResponseCookies(baseUri.toString(), result.setCookies)
+                        binding.loginPasswordInput.setText("")
+                        refreshBootstrap(showLoadingIndicator = false)
+                    }
+
+                    result.code == 401 -> {
+                        setLoginBusy(false, getString(R.string.login_invalid_credentials))
+                    }
+
+                    else -> {
+                        setLoginBusy(false, result.userMessage.ifBlank { getString(R.string.login_connection_failed) })
+                    }
+                }
+            }
+        }
+    }
+
+    private fun logout() {
+        val baseUri = currentBaseUri ?: return showLoginPanel()
+        showLoading()
+        thread {
+            performRequest(baseUri, "/api/auth/logout", "POST", "{}")
+            runOnUiThread {
+                clearSessionCookies()
+                bootstrapData = null
+                selectedDetail = null
+                selectedSessionId = null
+                currentScreen = Screen.INBOX
+                hideLoading()
+                showLoginPanel()
+            }
+        }
+    }
+
+    private fun showShell() {
+        binding.nativeShellPanel.visibility = View.VISIBLE
+        binding.errorPanel.visibility = View.GONE
+        binding.serverConfigPanel.visibility = View.GONE
+        binding.loginPanel.visibility = View.GONE
+    }
+
+    private fun showScreen(screen: Screen) {
+        currentScreen = screen
+        binding.inboxScreen.visibility = if (screen == Screen.INBOX) View.VISIBLE else View.GONE
+        binding.detailScreen.visibility = if (screen == Screen.DETAIL) View.VISIBLE else View.GONE
+        binding.settingsScreen.visibility = if (screen == Screen.SETTINGS) View.VISIBLE else View.GONE
+        binding.inboxTabButton.isEnabled = screen != Screen.INBOX
+        binding.settingsTabButton.isEnabled = screen != Screen.SETTINGS
+        binding.shellSubtitle.text = when (screen) {
+            Screen.INBOX -> getString(R.string.native_shell_subtitle_default)
+            Screen.DETAIL -> selectedSession()?.optString("title").orEmpty()
+            Screen.SETTINGS -> getString(R.string.native_settings_title)
+        }
+    }
+
+    private fun renderInbox() {
+        val workspaceOptions = projectLabels()
+        binding.newSessionWorkspaceSpinner.adapter =
+            ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, workspaceOptions.ifEmpty { listOf(getString(R.string.native_workspace_required)) })
+
+        binding.sessionsListContainer.removeAllViews()
+        val items = sessions()
+        if (items.isEmpty()) {
+            binding.sessionsListContainer.addView(emptyStateView(getString(R.string.native_empty_sessions)))
+            return
+        }
+
+        items.forEach { session ->
+            binding.sessionsListContainer.addView(sessionCard(session))
+        }
+    }
+
+    private fun renderSettings() {
+        binding.settingsServerValue.text = currentServerLabel()
+        val system = bootstrapData?.optJSONObject("system")
+        val model = system?.optString("default_model").orEmpty().ifBlank { "default" }
+        val cli = system?.optString("codex_cli_version").orEmpty().ifBlank { "unknown" }
+        val activeRuns = system?.optInt("active_runs") ?: 0
+        binding.settingsSystemValue.text = "CLI $cli\nModel $model\nActive runs $activeRuns"
+    }
+
+    private fun renderDetail() {
+        val detail = selectedDetail
+        val session = detail?.optJSONObject("session")
+        if (session == null) {
+            binding.detailMessagesContainer.removeAllViews()
+            binding.detailMessagesContainer.addView(emptyStateView(getString(R.string.native_select_session)))
+            return
+        }
+        binding.detailTitle.text = session.optString("title").ifBlank { session.optString("id") }
+        binding.detailMeta.text = buildString {
+            append(session.optString("cwd"))
+            val model = session.optString("model")
+            if (model.isNotBlank()) {
+                append("\n")
+                append(model)
+            }
+        }
+        binding.detailStatusText.text = sessionStatusLabel(session)
+        binding.detailPinButton.text = getString(if (session.optBoolean("pinned")) R.string.native_unpin else R.string.native_pin)
+
+        binding.detailMessagesContainer.removeAllViews()
+        val messages = detail.optJSONArray("messages").toJsonObjects()
+        if (messages.isEmpty()) {
+            binding.detailMessagesContainer.addView(emptyStateView(getString(R.string.native_empty_messages)))
+        } else {
+            messages.forEach { message ->
+                binding.detailMessagesContainer.addView(messageCard(message))
+            }
+        }
+        binding.detailMessagesScroll.post {
+            binding.detailMessagesScroll.fullScroll(View.FOCUS_DOWN)
+        }
+    }
+
+    private fun sessionCard(session: JSONObject): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedCard("#FFFFFF")
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(12)
+            }
+            setOnClickListener {
+                selectedSessionId = session.optString("id")
+                currentScreen = Screen.DETAIL
+                refreshSelectedSessionDetail()
+            }
+        }
+
+        card.addView(textView(session.optString("title").ifBlank { session.optString("id") }, 18f, Typeface.BOLD, "#162033"))
+        card.addView(textView(sessionStatusLabel(session), 14f, Typeface.NORMAL, "#44618E").apply {
+            setPadding(0, dp(6), 0, 0)
+        })
+        card.addView(textView(sessionSummary(session), 15f, Typeface.NORMAL, "#31415D").apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+        card.addView(textView(session.optString("cwd"), 13f, Typeface.NORMAL, "#60708E").apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(12), 0, 0)
+        }
+        actions.addView(actionButton(getString(if (session.optBoolean("pinned")) R.string.native_unpin else R.string.native_pin)) {
+            toggleSessionPin(session.optString("id"), !session.optBoolean("pinned"))
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        actions.addView(actionButton(getString(R.string.native_send_prompt)) {
+            selectedSessionId = session.optString("id")
+            currentScreen = Screen.DETAIL
+            refreshSelectedSessionDetail()
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = dp(10)
+            }
+        })
+        card.addView(actions)
+
+        return card
+    }
+
+    private fun messageCard(message: JSONObject): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = roundedCard(if (message.optString("role") == "assistant") "#EEF5FF" else "#FFFFFF")
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            }
+        }
+        val header = buildString {
+            append(if (message.optString("role") == "assistant") "Codex" else "You")
+            val createdAt = message.optString("created_at")
+            if (createdAt.isNotBlank()) {
+                append(" · ")
+                append(createdAt)
+            }
+        }
+        card.addView(textView(header, 13f, Typeface.BOLD, "#60708E"))
+        card.addView(textView(message.optString("text"), 15f, Typeface.NORMAL, "#162033").apply {
+            setPadding(0, dp(8), 0, 0)
+        })
+        return card
+    }
+
+    private fun emptyStateView(text: String): View {
+        return textView(text, 15f, Typeface.NORMAL, "#60708E").apply {
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+    }
+
+    private fun actionButton(label: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun textView(text: String, sizeSp: Float, typeface: Int, colorHex: String): TextView {
+        return TextView(this).apply {
+            this.text = text
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
+            setTypeface(null, typeface)
+            setTextColor(Color.parseColor(colorHex))
+        }
+    }
+
+    private fun roundedCard(colorHex: String): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(22).toFloat()
+            setColor(Color.parseColor(colorHex))
+        }
+    }
+
+    private fun sessions(): List<JSONObject> {
+        return bootstrapData?.optJSONArray("sessions").toJsonObjects()
+    }
+
+    private fun selectedSession(): JSONObject? {
+        val sessionId = selectedSessionId ?: return null
+        return sessions().firstOrNull { it.optString("id") == sessionId }
+            ?: selectedDetail?.optJSONObject("session")
+    }
+
+    private fun projectPaths(): List<String> {
+        return bootstrapData?.optJSONArray("projects").toJsonObjects().map { it.optString("path") }.filter { it.isNotBlank() }
+    }
+
+    private fun projectLabels(): List<String> {
+        return bootstrapData?.optJSONArray("projects").toJsonObjects().map { workspace ->
+            "${workspace.optString("name")} • ${workspace.optString("path")}"
+        }.filter { it.isNotBlank() }
+    }
+
+    private fun sessionSummary(session: JSONObject): String {
+        val latestRun = session.optJSONObject("latest_run")
+        val finalMessage = latestRun?.optString("final_message").orEmpty()
+        if (finalMessage.isNotBlank()) {
+            return finalMessage
+        }
+        val prompt = latestRun?.optString("prompt").orEmpty()
+        if (prompt.isNotBlank()) {
+            return prompt
+        }
+        return session.optString("cwd")
+    }
+
+    private fun sessionStatusLabel(session: JSONObject): String {
+        val latestRun = session.optJSONObject("latest_run")
+        return when (latestRun?.optString("status").orEmpty().ifBlank { session.optString("status") }) {
+            "running" -> "执行中"
+            "queued" -> "排队中"
+            "failed" -> "失败"
+            "completed" -> "已完成"
+            "cancelled" -> "已取消"
+            else -> "空闲"
+        }
+    }
+
+    private fun saveServerAndContinue() {
         val parsed = ShellConfig.normalizeBaseWebUrl(binding.serverUrlInput.text?.toString().orEmpty())
         if (parsed == null) {
             binding.serverUrlInput.error = getString(R.string.invalid_server_url)
             return
         }
-
         binding.serverUrlInput.error = null
         preferences.edit().putString(baseUrlPrefKey, parsed.toString()).apply()
         currentBaseUri = parsed
-        showLoading()
-        loadHome()
+        dismissServerConfigPanel()
+        tryBootstrapFromStoredSession()
     }
 
     private fun configuredBaseUri(): Uri? {
@@ -201,65 +667,160 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showServerConfigPanel() {
+        returnToLoginAfterServerConfig = binding.loginPanel.visibility == View.VISIBLE || binding.nativeShellPanel.visibility != View.VISIBLE
         val currentValue = currentBaseUri?.toString()
             ?: preferences.getString(baseUrlPrefKey, ShellConfig.defaultBaseWebUrl)
             ?: ShellConfig.defaultBaseWebUrl
         binding.serverUrlInput.setText(currentValue)
         binding.serverUrlInput.setSelection(binding.serverUrlInput.text?.length ?: 0)
-        binding.serverUrlInput.error = null
         binding.serverConfigPanel.visibility = View.VISIBLE
         binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
-        binding.swipeRefresh.isEnabled = false
+        binding.loginPanel.visibility = View.GONE
         binding.errorPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.GONE
         hideLoading()
     }
 
-    private fun hideServerConfigPanel() {
+    private fun dismissServerConfigPanel() {
         binding.serverConfigPanel.visibility = View.GONE
-        binding.swipeRefresh.isEnabled = !binding.webView.canScrollVertically(-1)
-    }
-
-    private fun currentServerLabel(): String {
-        return currentBaseUri?.host ?: getString(R.string.server_unknown)
-    }
-
-    private fun openExternal(uri: Uri) {
-        startActivity(Intent(Intent.ACTION_VIEW, uri))
-    }
-
-    private fun showLoading() {
-        if (!binding.swipeRefresh.isRefreshing) {
-            binding.loadingIndicator.visibility = View.VISIBLE
+        if (returnToLoginAfterServerConfig) {
+            showLoginPanel()
+        } else if (bootstrapData != null) {
+            showShell()
+            showScreen(currentScreen)
         }
     }
 
-    private fun hideLoading() {
-        binding.loadingIndicator.visibility = View.GONE
-        binding.swipeRefresh.isRefreshing = false
+    private fun showLoginPanel(message: String? = null) {
+        binding.loginServerValue.text = currentServerLabel()
+        binding.loginPanel.visibility = View.VISIBLE
+        binding.serverConfigPanel.visibility = View.GONE
+        binding.errorPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.GONE
+        setLoginBusy(false, message)
     }
 
-    private fun hideError() {
-        binding.errorPanel.visibility = View.GONE
+    private fun setLoginBusy(isBusy: Boolean, statusMessage: String? = null) {
+        loginBusy = isBusy
+        binding.loginButton.isEnabled = !isBusy
+        binding.loginChangeServerButton.isEnabled = !isBusy
+        binding.loginUsernameInput.isEnabled = !isBusy
+        binding.loginPasswordInput.isEnabled = !isBusy
+        binding.loginButton.text = getString(if (isBusy) R.string.login_loading else R.string.login_submit)
+        val status = statusMessage?.trim().orEmpty()
+        binding.loginStatusText.text = status
+        binding.loginStatusText.visibility = if (status.isEmpty()) View.GONE else View.VISIBLE
+        if (isBusy) showLoading() else hideLoading()
     }
 
     private fun showError(message: String) {
         binding.errorTitle.text = getString(R.string.error_title)
         binding.errorMessage.text = message
         binding.errorPanel.visibility = View.VISIBLE
-        hideLoading()
+        binding.loginPanel.visibility = View.GONE
+        binding.serverConfigPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.GONE
     }
 
-    inner class ShellBridge {
-        @JavascriptInterface
-        fun openServerSettings() {
-            runOnUiThread {
-                showServerConfigPanel()
+    private fun showLoading() {
+        binding.loadingIndicator.visibility = View.VISIBLE
+    }
+
+    private fun hideLoading() {
+        binding.loadingIndicator.visibility = View.GONE
+    }
+
+    private fun currentServerLabel(): String {
+        val baseUri = currentBaseUri ?: return getString(R.string.server_unknown)
+        return buildString {
+            append(baseUri.host ?: getString(R.string.server_unknown))
+            if (baseUri.port != -1) {
+                append(":")
+                append(baseUri.port)
             }
         }
+    }
 
-        @JavascriptInterface
-        fun currentServerLabel(): String {
-            return this@MainActivity.currentServerLabel()
+    private fun schedulePolling() {
+        handler.removeCallbacks(pollRunnable)
+        handler.postDelayed(pollRunnable, pollIntervalMs)
+    }
+
+    private fun stopPolling() {
+        handler.removeCallbacks(pollRunnable)
+    }
+
+    private fun clearSessionCookies() {
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.removeAllCookies(null)
+        cookieManager.flush()
+    }
+
+    private fun applyResponseCookies(url: String, cookies: List<String>) {
+        val cookieManager = CookieManager.getInstance()
+        cookies.forEach { cookie ->
+            cookieManager.setCookie(url, cookie)
+        }
+        cookieManager.flush()
+    }
+
+    private fun performRequest(baseUri: Uri, path: String, method: String, body: String?): ApiResult {
+        val endpoint = baseUri.buildUpon().encodedPath(path).build().toString()
+        return runCatching {
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                requestMethod = method
+                connectTimeout = 8000
+                readTimeout = 8000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("X-Requested-With", "CodexAppMobile")
+                CookieManager.getInstance().getCookie(baseUri.toString())?.takeIf { it.isNotBlank() }?.let {
+                    setRequestProperty("Cookie", it)
+                }
+                if (body != null) {
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                    OutputStreamWriter(outputStream, Charsets.UTF_8).use { writer ->
+                        writer.write(body)
+                    }
+                }
+            }
+
+            val code = connection.responseCode
+            val responseText = runCatching {
+                val stream = if (code in 200..299) connection.inputStream else connection.errorStream ?: connection.inputStream
+                stream.bufferedReader().use { it.readText() }
+            }.getOrDefault("")
+            val root = runCatching { JSONObject(responseText) }.getOrNull()
+            val data = root?.optJSONObject("data")
+            val message = root?.optJSONObject("error")?.optString("message").orEmpty()
+            val cookies = connection.headerFields["Set-Cookie"].orEmpty()
+            connection.disconnect()
+            ApiResult(success = code in 200..299, code = code, data = data, userMessage = message, setCookies = cookies)
+        }.getOrElse {
+            ApiResult(success = false, code = -1, data = null, userMessage = getString(R.string.login_connection_failed), setCookies = emptyList())
         }
     }
+
+    private fun JSONArray?.toJsonObjects(): List<JSONObject> {
+        if (this == null) {
+            return emptyList()
+        }
+        return buildList {
+            for (index in 0 until length()) {
+                optJSONObject(index)?.let(::add)
+            }
+        }
+    }
+
+    private fun dp(value: Int): Int {
+        return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
+    }
+
+    private data class ApiResult(
+        val success: Boolean,
+        val code: Int,
+        val data: JSONObject?,
+        val userMessage: String,
+        val setCookies: List<String>,
+    )
 }

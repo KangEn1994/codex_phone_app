@@ -193,6 +193,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         runner.reconcile_active_runs()
         return api_ok({"items": enrich_sessions(store.list_sessions())})
 
+    @app.get("/api/mobile/bootstrap")
+    async def mobile_bootstrap(session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
+        require_user(session_token)
+        runner.reconcile_active_runs()
+        return api_ok(
+            {
+                "user": store.user,
+                "projects": repository.allowed_workspaces(),
+                "sessions": enrich_sessions(store.list_sessions()),
+                "system": repository.system_status(store.count_active_runs()),
+            }
+        )
+
     @app.post("/api/sessions/reorder")
     async def reorder_sessions(payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
@@ -263,6 +276,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         require_user(session_token)
         runner.reconcile_session_run(session_id)
         return api_ok({"session_id": session_id, "items": store.list_runs(session_id)})
+
+    @app.get("/api/mobile/sessions/{session_id}/detail")
+    async def mobile_session_detail(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
+        require_user(session_token)
+        runner.reconcile_session_run(session_id)
+        session = enrich_session(store.get_session(session_id))
+        messages = repository.get_messages(session["codex_thread_id"]) if session["codex_thread_id"] else []
+        runs = store.list_runs(session_id)
+        return api_ok({"session": session, "messages": messages, "runs": runs})
 
     @app.post("/api/sessions/{session_id}/runs")
     async def create_run(session_id: str, payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
