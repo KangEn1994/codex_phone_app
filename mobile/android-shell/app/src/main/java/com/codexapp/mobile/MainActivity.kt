@@ -43,6 +43,13 @@ class MainActivity : AppCompatActivity() {
         LOGS,
     }
 
+    private enum class OverlaySurface {
+        LOGIN,
+        ERROR,
+        SERVER_CONFIG,
+        SHELL,
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var preferences: SharedPreferences
 
@@ -65,6 +72,8 @@ class MainActivity : AppCompatActivity() {
     private var bootstrapData: JSONObject? = null
     private var selectedDetail: JSONObject? = null
     private var loginBusy = false
+    private var logsReturnSurface = OverlaySurface.SHELL
+    private var lastErrorMessage = ""
     private val logEntries = mutableListOf<String>()
     private val logTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
@@ -86,6 +95,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
+                currentScreen == Screen.LOGS -> closeLogs()
                 binding.loginPanel.visibility == View.VISIBLE -> finish()
                 binding.detailScreen.visibility == View.VISIBLE -> showScreen(Screen.INBOX)
                 else -> finish()
@@ -132,6 +142,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.loginButton.setOnClickListener { submitNativeLogin() }
         binding.loginChangeServerButton.setOnClickListener { showServerConfigPanel() }
+        binding.loginLogsButton.setOnClickListener { openLogs(OverlaySurface.LOGIN) }
         binding.loginPasswordInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 submitNativeLogin()
@@ -156,10 +167,13 @@ class MainActivity : AppCompatActivity() {
         binding.settingsRefreshButton.setOnClickListener { refreshBootstrap() }
         binding.settingsChangeServerButton.setOnClickListener { showServerConfigPanel() }
         binding.settingsLogoutButton.setOnClickListener { logout() }
+        binding.errorLogsButton.setOnClickListener { openLogs(OverlaySurface.ERROR) }
+        binding.serverLogsButton.setOnClickListener { openLogs(OverlaySurface.SERVER_CONFIG) }
         binding.logsClearButton.setOnClickListener {
             logEntries.clear()
             appendLog("日志已清空")
         }
+        binding.logsBackButton.setOnClickListener { closeLogs() }
     }
 
     private fun retryVisibleState() {
@@ -457,6 +471,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showShell() {
+        logsReturnSurface = OverlaySurface.SHELL
         binding.nativeShellPanel.visibility = View.VISIBLE
         binding.errorPanel.visibility = View.GONE
         binding.serverConfigPanel.visibility = View.GONE
@@ -779,12 +794,48 @@ class MainActivity : AppCompatActivity() {
 
     private fun showError(message: String) {
         appendLog("显示错误页：$message")
+        lastErrorMessage = message
         binding.errorTitle.text = getString(R.string.error_title)
         binding.errorMessage.text = message
         binding.errorPanel.visibility = View.VISIBLE
         binding.loginPanel.visibility = View.GONE
         binding.serverConfigPanel.visibility = View.GONE
         binding.nativeShellPanel.visibility = View.GONE
+    }
+
+    private fun openLogs(source: OverlaySurface) {
+        logsReturnSurface = source
+        binding.loginPanel.visibility = View.GONE
+        binding.serverConfigPanel.visibility = View.GONE
+        binding.errorPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.VISIBLE
+        showScreen(Screen.LOGS)
+    }
+
+    private fun closeLogs() {
+        when (logsReturnSurface) {
+            OverlaySurface.LOGIN -> showLoginPanel(binding.loginStatusText.text?.toString())
+            OverlaySurface.ERROR -> restoreErrorPanel()
+            OverlaySurface.SERVER_CONFIG -> showServerConfigPanel()
+            OverlaySurface.SHELL -> {
+                if (bootstrapData != null) {
+                    showShell()
+                    showScreen(Screen.INBOX)
+                } else {
+                    showLoginPanel()
+                }
+            }
+        }
+    }
+
+    private fun restoreErrorPanel() {
+        binding.errorTitle.text = getString(R.string.error_title)
+        binding.errorMessage.text = lastErrorMessage.ifBlank { getString(R.string.error_message_default) }
+        binding.errorPanel.visibility = View.VISIBLE
+        binding.loginPanel.visibility = View.GONE
+        binding.serverConfigPanel.visibility = View.GONE
+        binding.nativeShellPanel.visibility = View.GONE
+        hideLoading()
     }
 
     private fun showLoading() {

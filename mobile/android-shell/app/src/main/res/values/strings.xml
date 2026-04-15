@@ -30,6 +30,8 @@
     <string name="native_tab_sessions">会话</string>
     <string name="native_tab_settings">设置</string>
     <string name="native_tab_logs">日志</string>
+    <string name="native_view_logs">查看日志</string>
+    <string name="native_logs_back">返回上一页</string>
     <string name="native_new_session_title">新建会话</string>
     <string name="native_new_session_subtitle">先选择项目，再输入首条 prompt，完全走原生交互。</string>
     <string name="native_workspace_label">项目文件夹</string>

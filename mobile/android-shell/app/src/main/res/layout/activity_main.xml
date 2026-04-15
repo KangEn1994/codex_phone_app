@@ -426,6 +426,13 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
                         android:text="@string/native_logs_clear" />
+
+                    <Button
+                        android:id="@+id/logs_back_button"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="@string/native_logs_back" />
                 </LinearLayout>
 
                 <LinearLayout
@@ -490,6 +497,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:text="@string/change_server" />
+
+            <Button
+                android:id="@+id/error_logs_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/native_view_logs" />
         </LinearLayout>
     </LinearLayout>
 
@@ -550,6 +564,13 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
                 android:text="@string/cancel" />
+
+            <Button
+                android:id="@+id/server_logs_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="@string/native_view_logs" />
         </LinearLayout>
     </LinearLayout>
 
@@ -673,6 +694,13 @@
                         android:layout_marginStart="12dp"
                         android:text="@string/change_server" />
                 </LinearLayout>
+
+                <Button
+                    android:id="@+id/login_logs_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/native_view_logs" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
