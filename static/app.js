@@ -1540,6 +1540,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "上一轮失败了，可以直接补一句继续推进。",
     "mobile.status.queued": "已进入队列，保持当前页面即可。",
     "mobile.status.ready": "当前空闲，可以继续发消息。",
+    "mobile.server.title": "服务器地址",
+    "mobile.server.description": "地址切换收进设置里，避免悬浮按钮打断主流程。",
+    "mobile.server.change": "更换地址",
   },
   "zh-TW": {
     "sidebar.filter.pinned": "置頂",
@@ -1567,6 +1570,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "上一輪失敗了，可以直接補一句繼續推進。",
     "mobile.status.queued": "已進入佇列，保持目前頁面即可。",
     "mobile.status.ready": "目前空閒，可以繼續傳送訊息。",
+    "mobile.server.title": "伺服器位址",
+    "mobile.server.description": "把位址切換收進設定裡，避免懸浮按鈕打斷主流程。",
+    "mobile.server.change": "更換位址",
   },
   en: {
     "sidebar.filter.pinned": "Pinned",
@@ -1594,6 +1600,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "The last turn failed. You can continue directly from here.",
     "mobile.status.queued": "Queued now. Stay on this screen and it will update.",
     "mobile.status.ready": "Idle now. Send the next message when ready.",
+    "mobile.server.title": "Server Address",
+    "mobile.server.description": "Address switching now lives in settings so it no longer interrupts the main flow.",
+    "mobile.server.change": "Change Address",
   },
   ja: {
     "sidebar.filter.pinned": "ピン留め",
@@ -1621,6 +1630,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "前回は失敗しました。ここからそのまま続けられます。",
     "mobile.status.queued": "キューに入りました。この画面のままで更新されます。",
     "mobile.status.ready": "現在は待機中です。準備ができたら次のメッセージを送れます。",
+    "mobile.server.title": "サーバーアドレス",
+    "mobile.server.description": "アドレス切り替えを設定内に移し、浮遊ボタンで作業を邪魔しないようにしました。",
+    "mobile.server.change": "アドレスを変更",
   },
   ko: {
     "sidebar.filter.pinned": "고정",
@@ -1648,6 +1660,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "직전 턴이 실패했습니다. 여기서 바로 이어서 진행할 수 있습니다.",
     "mobile.status.queued": "대기열에 들어갔습니다. 이 화면에서 업데이트됩니다.",
     "mobile.status.ready": "현재 유휴 상태입니다. 준비되면 다음 메시지를 보내세요.",
+    "mobile.server.title": "서버 주소",
+    "mobile.server.description": "주소 변경을 설정 안으로 옮겨 메인 흐름을 방해하지 않게 했습니다.",
+    "mobile.server.change": "주소 변경",
   },
   ar: {
     "sidebar.filter.pinned": "مثبتة",
@@ -1675,6 +1690,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "فشلت الجولة السابقة. يمكنك المتابعة مباشرة من هنا.",
     "mobile.status.queued": "تمت إضافتها إلى قائمة الانتظار. ابق على هذه الشاشة وسيتم التحديث.",
     "mobile.status.ready": "الجلسة الآن في وضع الخمول. أرسل الرسالة التالية عندما تكون جاهزًا.",
+    "mobile.server.title": "عنوان الخادم",
+    "mobile.server.description": "أصبح تغيير العنوان داخل الإعدادات حتى لا تقاطعك الزر العائمة أثناء الاستخدام.",
+    "mobile.server.change": "تغيير العنوان",
   },
   ru: {
     "sidebar.filter.pinned": "Закреплённые",
@@ -1702,6 +1720,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "Предыдущий ход завершился ошибкой. Можно продолжить прямо отсюда.",
     "mobile.status.queued": "Сессия в очереди. Оставайтесь на этом экране, и данные обновятся.",
     "mobile.status.ready": "Сессия сейчас свободна. Отправьте следующее сообщение, когда будете готовы.",
+    "mobile.server.title": "Адрес сервера",
+    "mobile.server.description": "Переключение адреса перенесено в настройки, чтобы плавающая кнопка не мешала основному сценарию.",
+    "mobile.server.change": "Сменить адрес",
   },
   th: {
     "sidebar.filter.pinned": "ปักหมุด",
@@ -1729,6 +1750,9 @@ const I18N_PATCH = {
     "mobile.status.failed": "รอบก่อนหน้าล้มเหลว คุณสามารถต่อจากตรงนี้ได้เลย",
     "mobile.status.queued": "เข้าคิวแล้ว อยู่หน้านี้ไว้และระบบจะอัปเดตให้",
     "mobile.status.ready": "ตอนนี้ว่างอยู่ ส่งข้อความถัดไปได้เมื่อพร้อม",
+    "mobile.server.title": "ที่อยู่เซิร์ฟเวอร์",
+    "mobile.server.description": "ย้ายการเปลี่ยนที่อยู่เข้าไปไว้ในหน้าตั้งค่า เพื่อไม่ให้ปุ่มลอยมาขัดจังหวะการใช้งานหลัก",
+    "mobile.server.change": "เปลี่ยนที่อยู่",
   },
 };
 
@@ -1838,6 +1862,29 @@ function isMobileShellClient() {
   return Boolean(state.runtime?.isMobileShell);
 }
 
+function mobileShellBridge() {
+  if (!isMobileShellClient()) {
+    return null;
+  }
+  const bridge = window.AndroidShell;
+  if (!bridge || typeof bridge.openServerSettings !== "function") {
+    return null;
+  }
+  return bridge;
+}
+
+function mobileShellServerLabel() {
+  const bridge = mobileShellBridge();
+  if (!bridge || typeof bridge.currentServerLabel !== "function") {
+    return "";
+  }
+  try {
+    return String(bridge.currentServerLabel() || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function syncRuntimeDecorations() {
   document.body.classList.toggle("mobile-shell", isMobileShellClient());
   document.body.dataset.client = isMobileShellClient() ? "mobile-shell" : "web";
@@ -1892,6 +1939,25 @@ function renderTerminalSettingsField() {
                 .join("")}
             </select>
           </label>
+  `;
+}
+
+function renderMobileServerSettingsCard() {
+  const serverLabel = mobileShellServerLabel();
+  if (!serverLabel) {
+    return "";
+  }
+  return `
+    <section class="composer-card settings-card shell-subpanel mobile-server-card">
+      <div class="card-head">
+        <p class="eyebrow">${escapeHtml(t("mobile.server.title"))}</p>
+        <h3>${escapeHtml(serverLabel)}</h3>
+        <p class="subtle">${escapeHtml(t("mobile.server.description"))}</p>
+      </div>
+      <div class="composer-actions">
+        <button class="ghost-button" type="button" data-action="open-server-settings">${escapeHtml(t("mobile.server.change"))}</button>
+      </div>
+    </section>
   `;
 }
 
@@ -2540,6 +2606,7 @@ function renderMobileInbox() {
 function renderSettingsSections() {
   const languageOptions = state.system?.supported_ui_languages || UI_LANGUAGE_OPTIONS.map((item) => item.value);
   return `
+    ${renderMobileServerSettingsCard()}
     <section class="settings-summary-grid">
       <article class="status-card">
         <span>${escapeHtml(t("settings.codexCli"))}</span>
@@ -3437,6 +3504,12 @@ function renderApp() {
         sessionPollTimer: null,
       });
       render();
+    });
+  });
+
+  document.querySelectorAll("[data-action='open-server-settings']").forEach((element) => {
+    element.addEventListener("click", () => {
+      mobileShellBridge()?.openServerSettings();
     });
   });
 

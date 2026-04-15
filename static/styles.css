@@ -51,6 +51,8 @@ body {
 body.mobile-shell {
   overscroll-behavior: none;
   touch-action: manipulation;
+  font-size: 17px;
+  line-height: 1.58;
 }
 
 button,
@@ -151,6 +153,7 @@ select {
   background: rgba(255, 255, 255, 0.94);
   padding: 14px 16px;
   color: var(--ink);
+  font-size: 1rem;
 }
 
 textarea {
@@ -183,6 +186,43 @@ textarea {
 .small-button {
   padding: 9px 14px;
   font-size: 0.92rem;
+}
+
+body.mobile-shell .eyebrow {
+  font-size: 0.86rem;
+  letter-spacing: 0.1em;
+}
+
+body.mobile-shell .subtle,
+body.mobile-shell .project-copy span,
+body.mobile-shell .project-meta,
+body.mobile-shell .thread-node-meta,
+body.mobile-shell .message-meta,
+body.mobile-shell .event-type,
+body.mobile-shell .event-seq,
+body.mobile-shell .session-switch-project,
+body.mobile-shell .session-switch-chip em,
+body.mobile-shell .mobile-session-meta,
+body.mobile-shell .status-card span,
+body.mobile-shell .settings-hint,
+body.mobile-shell .session-id-row,
+body.mobile-shell .current-path,
+body.mobile-shell .connection {
+  font-size: 0.95rem;
+}
+
+body.mobile-shell .primary-button,
+body.mobile-shell .ghost-button,
+body.mobile-shell .mobile-tab-button,
+body.mobile-shell .effort-chip {
+  min-height: 44px;
+  font-size: 0.98rem;
+}
+
+body.mobile-shell .small-button {
+  min-height: 40px;
+  padding: 10px 15px;
+  font-size: 0.95rem;
 }
 
 .ghost-button.active {
@@ -526,6 +566,10 @@ textarea {
   font-size: 1.08rem;
 }
 
+body.mobile-shell .status-card strong {
+  font-size: 1.14rem;
+}
+
 .current-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
@@ -554,6 +598,10 @@ textarea {
   border: 1px solid rgba(22, 32, 51, 0.06);
 }
 
+body.mobile-shell .message {
+  padding: 18px;
+}
+
 .message.assistant {
   background: linear-gradient(180deg, rgba(21, 94, 239, 0.08), rgba(255, 255, 255, 0.88));
 }
@@ -562,6 +610,18 @@ textarea {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+body.mobile-shell .message-meta {
+  margin-bottom: 10px;
+}
+
+body.mobile-shell .message pre,
+body.mobile-shell textarea,
+body.mobile-shell input,
+body.mobile-shell select {
+  font-size: 1rem;
+  line-height: 1.65;
 }
 
 .message-list {
@@ -736,6 +796,11 @@ textarea {
   letter-spacing: 0.04em;
 }
 
+body.mobile-shell .badge {
+  font-size: 0.86rem;
+  padding: 7px 11px;
+}
+
 .badge.soft {
   background: rgba(22, 32, 51, 0.08);
   color: var(--ink);
@@ -892,7 +957,7 @@ textarea {
 .mobile-session-main strong,
 .mobile-detail-copy h1 {
   margin: 0;
-  font-size: 1.12rem;
+  font-size: 1.24rem;
   line-height: 1.35;
 }
 
@@ -900,6 +965,7 @@ textarea {
   margin: 0;
   color: #31415d;
   line-height: 1.5;
+  font-size: 1rem;
 }
 
 .mobile-session-meta {
@@ -918,6 +984,10 @@ textarea {
   gap: 6px;
 }
 
+.mobile-detail-copy .subtle {
+  font-size: 0.98rem;
+}
+
 .mobile-status-banner {
   padding: 16px 18px;
   display: grid;
@@ -930,6 +1000,15 @@ textarea {
 .mobile-status-banner strong,
 .mobile-status-banner p {
   margin: 0;
+}
+
+.mobile-status-banner strong {
+  font-size: 1.02rem;
+}
+
+.mobile-status-banner p {
+  font-size: 0.98rem;
+  line-height: 1.6;
 }
 
 .mobile-status-banner.running {
@@ -951,6 +1030,12 @@ textarea {
 .mobile-settings-stack {
   display: grid;
   gap: 14px;
+}
+
+.mobile-server-card h3 {
+  margin: 0;
+  font-size: 1.18rem;
+  line-height: 1.4;
 }
 
 .mobile-tabs.hidden {
@@ -993,6 +1078,10 @@ textarea {
 @media (max-width: 720px) {
   .screen {
     padding: calc(14px + var(--safe-top)) calc(14px + var(--safe-right)) calc(88px + var(--safe-bottom)) calc(14px + var(--safe-left));
+  }
+
+  body.mobile-shell {
+    font-size: 18px;
   }
 
   .sidebar,
@@ -1057,5 +1146,20 @@ textarea {
   .mobile-page-head,
   .mobile-session-card {
     border-radius: 22px;
+  }
+
+  body.mobile-shell .messages-panel,
+  body.mobile-shell .composer-card,
+  body.mobile-shell .settings-card,
+  body.mobile-shell .status-card {
+    padding: 20px;
+  }
+
+  body.mobile-shell .message-list {
+    max-height: none;
+  }
+
+  body.mobile-shell .conversation-panel {
+    min-height: calc(100vh - 220px);
   }
 }

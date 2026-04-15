@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -58,7 +59,6 @@ class MainActivity : AppCompatActivity() {
             binding.webView.reload()
         }
         binding.changeServerButton.setOnClickListener { showServerConfigPanel() }
-        binding.openServerSettingsButton.setOnClickListener { showServerConfigPanel() }
         binding.cancelServerButton.setOnClickListener {
             if (currentBaseUri != null) {
                 hideServerConfigPanel()
@@ -105,6 +105,7 @@ class MainActivity : AppCompatActivity() {
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(webView, true)
+        webView.addJavascriptInterface(ShellBridge(), "AndroidShell")
 
         if (ShellConfig.enableWebDebug && WebViewFeature.isFeatureSupported(WebViewFeature.START_SAFE_BROWSING)) {
             WebViewCompat.startSafeBrowsing(this) {}
@@ -175,7 +176,6 @@ class MainActivity : AppCompatActivity() {
             return
         }
         currentBaseUri = targetUri
-        updateServerQuickActions()
         hideServerConfigPanel()
         hideError()
         binding.webView.loadUrl(targetUri.toString())
@@ -191,7 +191,6 @@ class MainActivity : AppCompatActivity() {
         binding.serverUrlInput.error = null
         preferences.edit().putString(baseUrlPrefKey, parsed.toString()).apply()
         currentBaseUri = parsed
-        updateServerQuickActions()
         showLoading()
         loadHome()
     }
@@ -211,7 +210,6 @@ class MainActivity : AppCompatActivity() {
         binding.serverConfigPanel.visibility = View.VISIBLE
         binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
         binding.swipeRefresh.isEnabled = false
-        binding.serverQuickActions.visibility = View.GONE
         binding.errorPanel.visibility = View.GONE
         hideLoading()
     }
@@ -219,13 +217,10 @@ class MainActivity : AppCompatActivity() {
     private fun hideServerConfigPanel() {
         binding.serverConfigPanel.visibility = View.GONE
         binding.swipeRefresh.isEnabled = !binding.webView.canScrollVertically(-1)
-        updateServerQuickActions()
     }
 
-    private fun updateServerQuickActions() {
-        binding.currentServerLabel.text = currentBaseUri?.host ?: getString(R.string.server_unknown)
-        val shouldShow = currentBaseUri != null && binding.serverConfigPanel.visibility != View.VISIBLE
-        binding.serverQuickActions.visibility = if (shouldShow) View.VISIBLE else View.GONE
+    private fun currentServerLabel(): String {
+        return currentBaseUri?.host ?: getString(R.string.server_unknown)
     }
 
     private fun openExternal(uri: Uri) {
@@ -252,5 +247,19 @@ class MainActivity : AppCompatActivity() {
         binding.errorMessage.text = message
         binding.errorPanel.visibility = View.VISIBLE
         hideLoading()
+    }
+
+    inner class ShellBridge {
+        @JavascriptInterface
+        fun openServerSettings() {
+            runOnUiThread {
+                showServerConfigPanel()
+            }
+        }
+
+        @JavascriptInterface
+        fun currentServerLabel(): String {
+            return this@MainActivity.currentServerLabel()
+        }
     }
 }

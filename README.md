@@ -27,7 +27,33 @@ CodexApp 是一个基于 FastAPI 的本地 Web 控制台，用来管理和查看
 
 依赖列表见 [requirements.txt](/Users/kang_en/codex/codexapp/requirements.txt)。
 
-安装示例：
+推荐统一使用 Python 3.11 或更高版本。本地开发时可以选择 `uv`、`conda` 或标准库 `venv` 来创建环境。
+
+### 使用 uv
+
+如果你希望继续使用仓库自带的 `scripts/codexapp-server` 管理脚本，建议把环境创建在仓库根目录的 `.venv`，因为脚本默认固定使用这个解释器路径。
+
+```bash
+uv venv --python 3.11 .venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+### 使用 conda
+
+如果你习惯用 conda，可以单独创建一个环境并通过当前激活环境里的 `python` 直接启动应用：
+
+```bash
+conda create -n codexapp python=3.11 -y
+conda activate codexapp
+pip install -r requirements.txt
+```
+
+注意：仓库自带脚本默认写死了根目录下的 `.venv/bin/python`，因此直接使用 conda 环境时，不建议运行 `scripts/codexapp-server`，而是直接执行后面的 `python -m uvicorn ...` 启动命令。
+
+### 使用 venv
+
+如果你不使用 `uv` 或 `conda`，也可以直接使用 Python 自带的 `venv`：
 
 ```bash
 python3 -m venv .venv
@@ -55,14 +81,19 @@ pip install -r requirements.txt
 
 ## 启动方式
 
-前台启动：
+### 直接前台启动
+
+适用于 `conda`、`uv`、`venv` 等任意已经激活好的 Python 环境：
 
 ```bash
-source .venv/bin/activate
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-使用仓库自带脚本：
+启动后访问 `http://127.0.0.1:8000/`。
+
+### 使用仓库自带脚本
+
+适用于你已经在仓库根目录创建好 `.venv` 的情况，例如使用 `uv venv .venv` 或 `python -m venv .venv`：
 
 ```bash
 scripts/codexapp-server start
@@ -71,7 +102,7 @@ scripts/codexapp-server stop
 scripts/codexapp-server foreground
 ```
 
-启动后访问 `http://127.0.0.1:8000/`。
+如果脚本报错提示找不到 `.venv/bin/python`，说明当前环境不是仓库根目录的 `.venv`，这时请改用上面的前台启动命令。
 
 ## 数据目录
 

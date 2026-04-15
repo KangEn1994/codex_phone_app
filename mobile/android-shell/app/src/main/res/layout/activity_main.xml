@@ -22,45 +22,6 @@
         android:layout_gravity="center" />
 
     <LinearLayout
-        android:id="@+id/server_quick_actions"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|end"
-        android:layout_margin="16dp"
-        android:background="#EAF2FF"
-        android:elevation="6dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="14dp"
-        android:paddingTop="10dp"
-        android:paddingEnd="10dp"
-        android:paddingBottom="10dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/current_server_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:maxWidth="180dp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:text="@string/server_unknown"
-            android:textColor="#1B3A6F"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/open_server_settings_button"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:minHeight="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/change_server"
-            android:textAllCaps="false" />
-    </LinearLayout>
-
-    <LinearLayout
         android:id="@+id/error_panel"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
