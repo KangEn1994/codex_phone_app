@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
@@ -16,6 +17,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import androidx.webkit.WebViewFeature
 import androidx.webkit.WebViewCompat
 import com.codexapp.mobile.databinding.ActivityMainBinding
@@ -70,6 +72,7 @@ class MainActivity : AppCompatActivity() {
                 false
             }
         }
+        configureSwipeRefresh(binding.swipeRefresh)
 
         configureWebView(binding.webView)
         val initialUri = configuredBaseUri()
@@ -78,6 +81,21 @@ class MainActivity : AppCompatActivity() {
         } else {
             currentBaseUri = initialUri
             loadHome()
+        }
+    }
+
+    private fun configureSwipeRefresh(refreshLayout: SwipeRefreshLayout) {
+        refreshLayout.setColorSchemeColors(
+            getColor(android.R.color.holo_blue_dark),
+            getColor(android.R.color.holo_blue_light),
+        )
+        refreshLayout.setProgressBackgroundColorSchemeColor(getColor(android.R.color.white))
+        refreshLayout.setOnChildScrollUpCallback { _, _ ->
+            binding.webView.canScrollVertically(-1)
+        }
+        refreshLayout.setOnRefreshListener {
+            hideError()
+            binding.webView.reload()
         }
     }
 
@@ -102,7 +120,11 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls = false
             userAgentString = "${userAgentString} ${ShellConfig.userAgentSuffix}"
         }
+        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            binding.swipeRefresh.isEnabled = scrollY == 0 && binding.serverConfigPanel.visibility != View.VISIBLE
+        }
 
+        webView.webChromeClient = WebChromeClient()
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val uri = request?.url ?: return true
@@ -180,12 +202,14 @@ class MainActivity : AppCompatActivity() {
         binding.serverUrlInput.error = null
         binding.serverConfigPanel.visibility = View.VISIBLE
         binding.cancelServerButton.visibility = if (currentBaseUri == null) View.GONE else View.VISIBLE
+        binding.swipeRefresh.isEnabled = false
         binding.errorPanel.visibility = View.GONE
         hideLoading()
     }
 
     private fun hideServerConfigPanel() {
         binding.serverConfigPanel.visibility = View.GONE
+        binding.swipeRefresh.isEnabled = !binding.webView.canScrollVertically(-1)
     }
 
     private fun openExternal(uri: Uri) {
@@ -193,11 +217,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoading() {
-        binding.loadingIndicator.visibility = View.VISIBLE
+        if (!binding.swipeRefresh.isRefreshing) {
+            binding.loadingIndicator.visibility = View.VISIBLE
+        }
     }
 
     private fun hideLoading() {
         binding.loadingIndicator.visibility = View.GONE
+        binding.swipeRefresh.isRefreshing = false
     }
 
     private fun hideError() {

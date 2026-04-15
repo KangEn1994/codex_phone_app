@@ -11,7 +11,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .codex import CodexCliRunner, CodexRepository
-from .config import APPROVAL_POLICIES, PASSWORD_MIN_LENGTH, SANDBOX_MODES, TERMINAL_APPS, Settings, coerce_bool, static_asset_version
+from .config import (
+    APPROVAL_POLICIES,
+    DEFAULT_UI_LANGUAGE,
+    PASSWORD_MIN_LENGTH,
+    SANDBOX_MODES,
+    SUPPORTED_UI_LANGUAGES,
+    TERMINAL_APPS,
+    Settings,
+    coerce_bool,
+    static_asset_version,
+)
 from .store import SessionStore
 
 
@@ -121,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/system/status")
     async def system_status(session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
+        runner.reconcile_active_runs()
         return api_ok(repository.system_status(store.count_active_runs()))
 
     @app.post("/api/system/settings")
@@ -131,6 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         terminal_app = str(payload.get("terminal_app") or "").strip().lower()
         sandbox_mode = str(payload.get("sandbox_mode") or "").strip().lower()
         approval_policy = str(payload.get("approval_policy") or "").strip().lower()
+        ui_language_raw = payload.get("ui_language")
+        ui_language = "" if ui_language_raw is None else (str(ui_language_raw).strip() or DEFAULT_UI_LANGUAGE)
         git_write_enabled_raw = payload.get("git_write_enabled")
         git_write_sandbox_mode = str(payload.get("git_write_sandbox_mode") or "").strip().lower()
         git_write_approval_policy = str(payload.get("git_write_approval_policy") or "").strip().lower()
@@ -145,6 +158,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": f"sandbox_mode must be one of: {', '.join(SANDBOX_MODES)}"})
         if approval_policy and approval_policy not in APPROVAL_POLICIES:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": f"approval_policy must be one of: {', '.join(APPROVAL_POLICIES)}"})
+        if ui_language and ui_language not in SUPPORTED_UI_LANGUAGES:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "INVALID_REQUEST", "message": f"ui_language must be one of: {', '.join(SUPPORTED_UI_LANGUAGES)}"},
+            )
         if git_write_enabled_raw is not None and git_write_enabled is None:
             raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "git_write_enabled must be a boolean"})
         if git_write_sandbox_mode and git_write_sandbox_mode not in SANDBOX_MODES:
@@ -157,6 +175,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             terminal_app=terminal_app,
             sandbox_mode=sandbox_mode,
             approval_policy=approval_policy,
+            ui_language=ui_language,
             git_write_enabled=git_write_enabled,
             git_write_sandbox_mode=git_write_sandbox_mode,
             git_write_approval_policy=git_write_approval_policy,
@@ -171,6 +190,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sessions")
     async def sessions(session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
+        runner.reconcile_active_runs()
         return api_ok({"items": enrich_sessions(store.list_sessions())})
 
     @app.post("/api/sessions/reorder")
@@ -196,17 +216,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sessions/{session_id}")
     async def get_session(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
+        runner.reconcile_session_run(session_id)
         return api_ok({"session": enrich_session(store.get_session(session_id))})
 
     @app.patch("/api/sessions/{session_id}")
     async def update_session(session_id: str, payload: dict[str, Any], session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
-        title = str(payload.get("title") or "").strip()
-        if not title:
-            raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title is required"})
-        if len(title) > 120:
-            raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title is too long"})
-        session = store.update_session_title(session_id, title)
+        has_title = "title" in payload
+        has_pinned = "pinned" in payload
+        if not has_title and not has_pinned:
+            raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title or pinned is required"})
+
+        title: str | None = None
+        if has_title:
+            title = str(payload.get("title") or "").strip()
+            if not title:
+                raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title is required"})
+            if len(title) > 120:
+                raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "title is too long"})
+
+        pinned: bool | None = None
+        if has_pinned:
+            pinned = coerce_bool(payload.get("pinned"))
+            if pinned is None:
+                raise HTTPException(status_code=400, detail={"code": "INVALID_REQUEST", "message": "pinned must be a boolean"})
+
+        session = store.update_session(session_id, title=title, pinned=pinned)
         return api_ok({"session": enrich_session(session)})
 
     @app.delete("/api/sessions/{session_id}")
@@ -218,6 +253,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sessions/{session_id}/messages")
     async def get_session_messages(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
+        runner.reconcile_session_run(session_id)
         session = store.get_session(session_id)
         messages = repository.get_messages(session["codex_thread_id"]) if session["codex_thread_id"] else []
         return api_ok({"session_id": session_id, "items": messages})
@@ -225,6 +261,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/sessions/{session_id}/runs")
     async def get_session_runs(session_id: str, session_token: str | None = Cookie(default=None, alias=app_settings.session_cookie)) -> dict[str, Any]:
         require_user(session_token)
+        runner.reconcile_session_run(session_id)
         return api_ok({"session_id": session_id, "items": store.list_runs(session_id)})
 
     @app.post("/api/sessions/{session_id}/runs")
@@ -256,6 +293,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await websocket.close(code=4401)
             return
 
+        runner.reconcile_session_run(session_id)
         await websocket.accept()
         await websocket.send_json({"event": "session.snapshot", "data": runner.session_snapshot(session_id)})
         queue = runner.subscribe(session_id)

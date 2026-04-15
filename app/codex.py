@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -15,9 +16,11 @@ from fastapi import HTTPException
 
 from .config import (
     APPROVAL_POLICIES,
+    DEFAULT_UI_LANGUAGE,
     MODEL_SUGGESTIONS,
     REASONING_EFFORTS,
     SANDBOX_MODES,
+    SUPPORTED_UI_LANGUAGES,
     TERMINAL_APPS,
     Settings,
     coerce_bool,
@@ -214,6 +217,7 @@ class CodexRepository:
             "terminal_app": str(config.get("terminal_app") or "").strip().lower(),
             "sandbox_mode": str(config.get("sandbox_mode") or "").strip().lower(),
             "approval_policy": str(config.get("approval_policy") or "").strip().lower(),
+            "ui_language": str(config.get("ui_language") or DEFAULT_UI_LANGUAGE).strip(),
             "git_write_enabled": bool(coerce_bool(config.get("git_write_enabled"))),
             "git_write_sandbox_mode": str(config.get("git_write_sandbox_mode") or "").strip().lower(),
             "git_write_approval_policy": str(config.get("git_write_approval_policy") or "").strip().lower(),
@@ -226,6 +230,7 @@ class CodexRepository:
         terminal_app: str,
         sandbox_mode: str,
         approval_policy: str,
+        ui_language: str = "",
         git_write_enabled: bool | None = None,
         git_write_sandbox_mode: str = "",
         git_write_approval_policy: str = "",
@@ -242,6 +247,8 @@ class CodexRepository:
             config["sandbox_mode"] = sandbox_mode
         if approval_policy:
             config["approval_policy"] = approval_policy
+        if ui_language:
+            config["ui_language"] = ui_language
         if git_write_enabled is not None:
             config["git_write_enabled"] = git_write_enabled
         if git_write_sandbox_mode:
@@ -429,6 +436,8 @@ class CodexRepository:
             "default_sandbox_mode": self.default_sandbox_mode(),
             "approval_policies": APPROVAL_POLICIES,
             "default_approval_policy": self.default_approval_policy(),
+            "supported_ui_languages": SUPPORTED_UI_LANGUAGES,
+            "default_ui_language": DEFAULT_UI_LANGUAGE,
             "default_git_write_enabled": self.default_git_write_enabled(),
             "default_git_write_sandbox_mode": self.default_git_write_sandbox_mode(),
             "default_git_write_approval_policy": self.default_git_write_approval_policy(),
@@ -498,6 +507,8 @@ class CliEventParser:
 
 
 class CodexCliRunner:
+    QUEUED_REPAIR_AFTER_SECONDS = 20
+
     def __init__(self, settings: Settings, store: SessionStore, repository: CodexRepository):
         self.settings = settings
         self.store = store
@@ -550,6 +561,50 @@ class CodexCliRunner:
             )
             recovered.append({"session": session, "run": final_run})
         return recovered
+
+    def _queued_run_is_stale(self, run: dict[str, Any]) -> bool:
+        created_at = str(run.get("created_at") or "").strip()
+        if not created_at:
+            return False
+        try:
+            parsed = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        age_seconds = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+        return age_seconds >= self.QUEUED_REPAIR_AFTER_SECONDS
+
+    def reconcile_active_runs(self) -> list[dict[str, Any]]:
+        recovered: list[dict[str, Any]] = []
+        managed = set(self._processes)
+        for run in self.store.list_active_runs():
+            if run["id"] in managed:
+                continue
+            if run["status"] == "running" and self._pid_is_alive(run["pid"]):
+                continue
+            if run["status"] == "queued" and not self._queued_run_is_stale(run):
+                continue
+            reason = "Recovered stale queued run during state refresh"
+            if run["status"] == "running":
+                reason = "Recovered stale running run during state refresh"
+            session, final_run = self.store.finalize_run(run["id"], "failed", None, run["final_message"], reason)
+            recovered.append({"session": session, "run": final_run})
+        return recovered
+
+    def reconcile_session_run(self, session_id: str) -> dict[str, Any] | None:
+        active = next((run for run in self.store.list_runs(session_id, limit=5) if run["status"] in {"queued", "running"}), None)
+        if active is None:
+            return None
+        if active["id"] in self._processes:
+            return None
+        if active["status"] == "running" and self._pid_is_alive(active["pid"]):
+            return None
+        if active["status"] == "queued" and not self._queued_run_is_stale(active):
+            return None
+        reason = "Recovered stale queued run during session refresh"
+        if active["status"] == "running":
+            reason = "Recovered stale running run during session refresh"
+        session, run = self.store.finalize_run(active["id"], "failed", None, active["final_message"], reason)
+        return {"session": session, "run": run}
 
     def subscribe(self, session_id: str) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=100)

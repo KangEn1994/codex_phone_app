@@ -62,6 +62,7 @@ class SessionStore:
                     cwd TEXT NOT NULL,
                     model TEXT NOT NULL,
                     title TEXT NOT NULL,
+                    pinned INTEGER NOT NULL DEFAULT 0,
                     status TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -118,6 +119,8 @@ class SessionStore:
             }
             if "sort_index" not in columns:
                 connection.execute("ALTER TABLE managed_sessions ADD COLUMN sort_index INTEGER NOT NULL DEFAULT 0")
+            if "pinned" not in columns:
+                connection.execute("ALTER TABLE managed_sessions ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
             rows = connection.execute(
                 """
                 SELECT id
@@ -232,6 +235,7 @@ class SessionStore:
             "cwd": row["cwd"],
             "model": row["model"],
             "title": row["title"],
+            "pinned": bool(row["pinned"]),
             "status": row["status"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -253,7 +257,7 @@ class SessionStore:
                 """
                 SELECT *
                 FROM managed_sessions
-                ORDER BY sort_index ASC, updated_at DESC, id DESC
+                ORDER BY pinned DESC, sort_index ASC, updated_at DESC, id DESC
                 """
             ).fetchall()
             items = [self._row_to_session(row, self._latest_run(connection, row["last_run_id"])) for row in rows]
@@ -274,8 +278,8 @@ class SessionStore:
             sort_index = int(row["next_sort_index"] if row else 1)
             connection.execute(
                 """
-                INSERT INTO managed_sessions (id, codex_thread_id, cwd, model, title, status, created_at, updated_at, last_run_id, sort_index)
-                VALUES (?, '', ?, ?, ?, 'ready', ?, ?, NULL, ?)
+                INSERT INTO managed_sessions (id, codex_thread_id, cwd, model, title, pinned, status, created_at, updated_at, last_run_id, sort_index)
+                VALUES (?, '', ?, ?, ?, 0, 'ready', ?, ?, NULL, ?)
                 """,
                 (session_id, cwd, model, title or "新会话", created_at, created_at, sort_index),
             )
@@ -410,17 +414,34 @@ class SessionStore:
             connection.commit()
         return self.get_session(session_id)
 
-    def update_session_title(self, session_id: str, title: str) -> dict[str, Any]:
-        clean = str(title or "").strip()
-        if not clean:
+    def update_session(self, session_id: str, title: str | None = None, pinned: bool | None = None) -> dict[str, Any]:
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if title is not None:
+            clean = str(title or "").strip()
+            if not clean:
+                return self.get_session(session_id)
+            updates.append("title = ?")
+            params.append(clean[:120])
+
+        if pinned is not None:
+            updates.append("pinned = ?")
+            params.append(1 if pinned else 0)
+
+        if not updates:
             return self.get_session(session_id)
+
         with self._connection() as connection:
             connection.execute(
-                "UPDATE managed_sessions SET title = ?, updated_at = ? WHERE id = ?",
-                (clean[:120], now_iso(), session_id),
+                f"UPDATE managed_sessions SET {', '.join(updates)}, updated_at = ? WHERE id = ?",
+                (*params, now_iso(), session_id),
             )
             connection.commit()
         return self.get_session(session_id)
+
+    def update_session_title(self, session_id: str, title: str) -> dict[str, Any]:
+        return self.update_session(session_id, title=title)
 
     def delete_session(self, session_id: str) -> None:
         with self._lock:

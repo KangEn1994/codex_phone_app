@@ -342,6 +342,7 @@ class AppTests(unittest.TestCase):
                 json_body={
                     "model": "gpt-5.2",
                     "reasoning_effort": "xhigh",
+                    "ui_language": "ja",
                     "terminal_app": "iterm",
                     "sandbox_mode": "danger-full-access",
                     "approval_policy": "never",
@@ -355,6 +356,7 @@ class AppTests(unittest.TestCase):
             payload = updated.json()["data"]
             self.assertEqual(payload["settings"]["model"], "gpt-5.2")
             self.assertEqual(payload["settings"]["reasoning_effort"], "xhigh")
+            self.assertEqual(payload["settings"]["ui_language"], "ja")
             self.assertEqual(payload["settings"]["terminal_app"], "iterm")
             self.assertEqual(payload["settings"]["sandbox_mode"], "danger-full-access")
             self.assertEqual(payload["settings"]["approval_policy"], "never")
@@ -377,6 +379,7 @@ class AppTests(unittest.TestCase):
             await self.wait_for_terminal_run(session["id"], cookies, "completed")
             app_settings_text = self.settings.config_path.read_text(encoding="utf-8")
             self.assertIn('reasoning_effort = "xhigh"', app_settings_text)
+            self.assertIn('ui_language = "ja"', app_settings_text)
             self.assertIn('terminal_app = "iterm"', app_settings_text)
             self.assertIn('sandbox_mode = "danger-full-access"', app_settings_text)
             self.assertIn('approval_policy = "never"', app_settings_text)
@@ -620,6 +623,19 @@ class AppTests(unittest.TestCase):
             ordered_ids = [item["id"] for item in reordered.json()["data"]["sessions"][:2]]
             self.assertEqual(ordered_ids, [second_session_id, first_session_id])
 
+            pinned = await self.async_request(
+                "PATCH",
+                f"/api/sessions/{first_session_id}",
+                json_body={"pinned": True},
+                cookies=cookies,
+            )
+            self.assertEqual(pinned.status_code, 200)
+            self.assertTrue(pinned.json()["data"]["session"]["pinned"])
+
+            sessions = await self.async_request("GET", "/api/sessions", cookies=cookies)
+            listed_ids = [item["id"] for item in sessions.json()["data"]["items"][:2]]
+            self.assertEqual(listed_ids, [first_session_id, second_session_id])
+
             deleted = await self.async_request(
                 "DELETE",
                 f"/api/sessions/{first_session_id}",
@@ -652,6 +668,25 @@ class AppTests(unittest.TestCase):
         self.assertIn("Recovered stale running run after service restart", repaired_run["stderr_tail"])
         self.assertEqual(repaired_session["status"], "failed")
 
+    def test_reconcile_stale_running_run_on_refresh(self) -> None:
+        session = self.app.state.store.create_session(
+            cwd=str(Path(self.settings.default_allowed_root) / "proj"),
+            model="gpt-5.4",
+            title="refresh stale session",
+        )
+        run = self.app.state.store.create_run(session["id"], "resume", "refresh stale prompt")
+        self.app.state.store.bind_thread_id(session["id"], "thread-stale-refresh-123")
+        self.app.state.store.mark_run_started(run["id"], 999999)
+
+        response = self.client.get(f"/api/sessions/{session['id']}", cookies=self.auth_cookies())
+        self.assertEqual(response.status_code, 200)
+
+        repaired_run = self.app.state.store.get_run(run["id"])
+        repaired_session = self.app.state.store.get_session(session["id"])
+        self.assertEqual(repaired_run["status"], "failed")
+        self.assertIn("Recovered stale running run during session refresh", repaired_run["stderr_tail"])
+        self.assertEqual(repaired_session["status"], "failed")
+
     def test_session_snapshot_contract(self) -> None:
         async def scenario() -> None:
             session, _ = await self.app.state.runner.start_session(
@@ -659,8 +694,13 @@ class AppTests(unittest.TestCase):
                 "gpt-5.4",
                 "snapshot prompt",
             )
-            await asyncio.sleep(0.3)
-            snapshot = self.app.state.runner.session_snapshot(session["id"])
+            snapshot = None
+            for _ in range(20):
+                snapshot = self.app.state.runner.session_snapshot(session["id"])
+                if snapshot["events"]:
+                    break
+                await asyncio.sleep(0.1)
+            self.assertIsNotNone(snapshot)
             self.assertEqual(snapshot["session"]["id"], session["id"])
             self.assertTrue(snapshot["runs"])
             self.assertTrue(snapshot["events"])
