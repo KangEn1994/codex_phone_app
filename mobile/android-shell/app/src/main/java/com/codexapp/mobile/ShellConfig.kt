@@ -3,7 +3,7 @@ package com.codexapp.mobile
 import android.net.Uri
 
 object ShellConfig {
-    const val defaultBaseWebUrl = "https://codexapp.example.com/"
+    const val defaultBaseWebUrl = "http://example.com:8000/"
     const val userAgentSuffix = "CodexAppMobile Android/1.0.0"
     const val enableWebDebug = false
 
