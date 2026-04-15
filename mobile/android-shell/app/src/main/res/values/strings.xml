@@ -29,6 +29,7 @@
     <string name="native_shell_subtitle_default">原生安卓客户端，直接通过 API 与后端交互。</string>
     <string name="native_tab_sessions">会话</string>
     <string name="native_tab_settings">设置</string>
+    <string name="native_tab_logs">日志</string>
     <string name="native_new_session_title">新建会话</string>
     <string name="native_new_session_subtitle">先选择项目，再输入首条 prompt，完全走原生交互。</string>
     <string name="native_workspace_label">项目文件夹</string>
@@ -45,6 +46,10 @@
     <string name="native_settings_title">客户端设置</string>
     <string name="native_system_summary_label">系统状态</string>
     <string name="native_logout">退出登录</string>
+    <string name="native_logs_title">调试日志</string>
+    <string name="native_logs_subtitle">记录原生客户端的请求地址、状态码和错误信息，方便排查安卓端问题。</string>
+    <string name="native_logs_clear">清空日志</string>
+    <string name="native_logs_empty">当前还没有日志。</string>
     <string name="native_empty_sessions">当前还没有会话，先创建一个。</string>
     <string name="native_empty_messages">当前会话还没有消息。</string>
     <string name="native_select_session">先从列表进入一个会话。</string>

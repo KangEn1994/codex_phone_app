@@ -25,6 +25,8 @@ import org.json.JSONObject
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity() {
         INBOX,
         DETAIL,
         SETTINGS,
+        LOGS,
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -62,6 +65,8 @@ class MainActivity : AppCompatActivity() {
     private var bootstrapData: JSONObject? = null
     private var selectedDetail: JSONObject? = null
     private var loginBusy = false
+    private val logEntries = mutableListOf<String>()
+    private val logTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,6 +96,7 @@ class MainActivity : AppCompatActivity() {
 
         configuredBaseUri()?.let {
             currentBaseUri = it
+            appendLog("发现已保存服务器地址：${currentServerLabel()}")
             tryBootstrapFromStoredSession()
         } ?: showServerConfigPanel()
     }
@@ -137,6 +143,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.inboxTabButton.setOnClickListener { showScreen(Screen.INBOX) }
         binding.settingsTabButton.setOnClickListener { showScreen(Screen.SETTINGS) }
+        binding.logsTabButton.setOnClickListener { showScreen(Screen.LOGS) }
         binding.inboxRefreshButton.setOnClickListener { refreshBootstrap() }
         binding.newSessionCreateButton.setOnClickListener { createSession() }
 
@@ -149,6 +156,10 @@ class MainActivity : AppCompatActivity() {
         binding.settingsRefreshButton.setOnClickListener { refreshBootstrap() }
         binding.settingsChangeServerButton.setOnClickListener { showServerConfigPanel() }
         binding.settingsLogoutButton.setOnClickListener { logout() }
+        binding.logsClearButton.setOnClickListener {
+            logEntries.clear()
+            appendLog("日志已清空")
+        }
     }
 
     private fun retryVisibleState() {
@@ -160,6 +171,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun tryBootstrapFromStoredSession() {
+        appendLog("开始检查已保存会话：${currentServerLabel()}")
         showLoginPanel()
         setLoginBusy(true, getString(R.string.login_loading))
         refreshBootstrap(showLoadingIndicator = false)
@@ -171,6 +183,7 @@ class MainActivity : AppCompatActivity() {
             showServerConfigPanel()
             return
         }
+        appendLog("刷新 bootstrap：${baseUri}")
         if (showLoadingIndicator) {
             showLoading()
         }
@@ -186,6 +199,7 @@ class MainActivity : AppCompatActivity() {
                         }
                         renderInbox()
                         renderSettings()
+                        renderLogs()
                         showShell()
                         if (currentScreen == Screen.DETAIL && !selectedSessionId.isNullOrBlank()) {
                             refreshSelectedSessionDetail(showLoadingIndicator = false)
@@ -196,12 +210,14 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     result.code == 401 -> {
+                        appendLog("bootstrap 返回 401，需要重新登录")
                         hideLoading()
                         clearSessionCookies()
                         showLoginPanel(getString(R.string.error_message_sign_in_required))
                     }
 
                     else -> {
+                        appendLog("bootstrap 失败：${result.userMessage.ifBlank { "未知错误" }}")
                         hideLoading()
                         if (binding.nativeShellPanel.visibility == View.VISIBLE) {
                             showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
@@ -222,6 +238,7 @@ class MainActivity : AppCompatActivity() {
             showScreen(Screen.INBOX)
             return
         }
+        appendLog("刷新会话详情：$sessionId")
         if (showLoadingIndicator) {
             showLoading()
         }
@@ -237,12 +254,14 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     result.code == 401 -> {
+                        appendLog("会话详情返回 401：$sessionId")
                         hideLoading()
                         clearSessionCookies()
                         showLoginPanel(getString(R.string.error_message_sign_in_required))
                     }
 
                     else -> {
+                        appendLog("会话详情失败：$sessionId ${result.userMessage.ifBlank { "未知错误" }}")
                         hideLoading()
                         showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
                     }
@@ -265,6 +284,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val prompt = binding.newSessionPromptInput.text?.toString().orEmpty()
+        appendLog("创建会话：cwd=$cwd")
         showLoading()
         thread {
             val payload = JSONObject()
@@ -277,17 +297,20 @@ class MainActivity : AppCompatActivity() {
                     result.success -> {
                         binding.newSessionPromptInput.setText("")
                         selectedSessionId = result.data?.optJSONObject("session")?.optString("id")
+                        appendLog("创建会话成功：${selectedSessionId.orEmpty()}")
                         currentScreen = Screen.DETAIL
                         refreshBootstrap(showLoadingIndicator = false)
                     }
 
                     result.code == 401 -> {
+                        appendLog("创建会话返回 401")
                         hideLoading()
                         clearSessionCookies()
                         showLoginPanel(getString(R.string.error_message_sign_in_required))
                     }
 
                     else -> {
+                        appendLog("创建会话失败：${result.userMessage.ifBlank { "未知错误" }}")
                         hideLoading()
                         showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
                     }
@@ -303,6 +326,7 @@ class MainActivity : AppCompatActivity() {
         if (prompt.isBlank()) {
             return
         }
+        appendLog("继续会话：$sessionId")
         showLoading()
         thread {
             val payload = JSONObject().put("prompt", prompt).toString()
@@ -311,16 +335,19 @@ class MainActivity : AppCompatActivity() {
                 when {
                     result.success -> {
                         binding.detailPromptInput.setText("")
+                        appendLog("继续会话成功：$sessionId")
                         refreshSelectedSessionDetail(showLoadingIndicator = false)
                     }
 
                     result.code == 401 -> {
+                        appendLog("继续会话返回 401：$sessionId")
                         hideLoading()
                         clearSessionCookies()
                         showLoginPanel(getString(R.string.error_message_sign_in_required))
                     }
 
                     else -> {
+                        appendLog("继续会话失败：$sessionId ${result.userMessage.ifBlank { "未知错误" }}")
                         hideLoading()
                         showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
                     }
@@ -336,6 +363,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleSessionPin(sessionId: String, nextPinned: Boolean) {
         val baseUri = currentBaseUri ?: return showServerConfigPanel()
+        appendLog("更新置顶状态：$sessionId -> $nextPinned")
         showLoading()
         thread {
             val payload = JSONObject().put("pinned", nextPinned).toString()
@@ -343,16 +371,19 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 when {
                     result.success -> {
+                        appendLog("更新置顶成功：$sessionId")
                         refreshBootstrap(showLoadingIndicator = false)
                     }
 
                     result.code == 401 -> {
+                        appendLog("更新置顶返回 401：$sessionId")
                         hideLoading()
                         clearSessionCookies()
                         showLoginPanel(getString(R.string.error_message_sign_in_required))
                     }
 
                     else -> {
+                        appendLog("更新置顶失败：$sessionId ${result.userMessage.ifBlank { "未知错误" }}")
                         hideLoading()
                         showError(result.userMessage.ifBlank { getString(R.string.error_message_default) })
                     }
@@ -375,6 +406,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.loginUsernameInput.error = null
         binding.loginPasswordInput.error = null
+        appendLog("尝试登录：server=${baseUri} username=$username")
         setLoginBusy(true, getString(R.string.login_loading))
         thread {
             val payload = JSONObject()
@@ -387,14 +419,17 @@ class MainActivity : AppCompatActivity() {
                     result.success -> {
                         applyResponseCookies(baseUri.toString(), result.setCookies)
                         binding.loginPasswordInput.setText("")
+                        appendLog("登录成功：$username")
                         refreshBootstrap(showLoadingIndicator = false)
                     }
 
                     result.code == 401 -> {
+                        appendLog("登录失败：401 Unauthorized")
                         setLoginBusy(false, getString(R.string.login_invalid_credentials))
                     }
 
                     else -> {
+                        appendLog("登录失败：${result.userMessage.ifBlank { "未知错误" }}")
                         setLoginBusy(false, result.userMessage.ifBlank { getString(R.string.login_connection_failed) })
                     }
                 }
@@ -404,6 +439,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun logout() {
         val baseUri = currentBaseUri ?: return showLoginPanel()
+        appendLog("退出登录：${baseUri}")
         showLoading()
         thread {
             performRequest(baseUri, "/api/auth/logout", "POST", "{}")
@@ -414,6 +450,7 @@ class MainActivity : AppCompatActivity() {
                 selectedSessionId = null
                 currentScreen = Screen.INBOX
                 hideLoading()
+                appendLog("退出登录完成")
                 showLoginPanel()
             }
         }
@@ -431,12 +468,18 @@ class MainActivity : AppCompatActivity() {
         binding.inboxScreen.visibility = if (screen == Screen.INBOX) View.VISIBLE else View.GONE
         binding.detailScreen.visibility = if (screen == Screen.DETAIL) View.VISIBLE else View.GONE
         binding.settingsScreen.visibility = if (screen == Screen.SETTINGS) View.VISIBLE else View.GONE
+        binding.logsScreen.visibility = if (screen == Screen.LOGS) View.VISIBLE else View.GONE
         binding.inboxTabButton.isEnabled = screen != Screen.INBOX
         binding.settingsTabButton.isEnabled = screen != Screen.SETTINGS
+        binding.logsTabButton.isEnabled = screen != Screen.LOGS
         binding.shellSubtitle.text = when (screen) {
             Screen.INBOX -> getString(R.string.native_shell_subtitle_default)
             Screen.DETAIL -> selectedSession()?.optString("title").orEmpty()
             Screen.SETTINGS -> getString(R.string.native_settings_title)
+            Screen.LOGS -> getString(R.string.native_logs_title)
+        }
+        if (screen == Screen.LOGS) {
+            renderLogs()
         }
     }
 
@@ -464,6 +507,25 @@ class MainActivity : AppCompatActivity() {
         val cli = system?.optString("codex_cli_version").orEmpty().ifBlank { "unknown" }
         val activeRuns = system?.optInt("active_runs") ?: 0
         binding.settingsSystemValue.text = "CLI $cli\nModel $model\nActive runs $activeRuns"
+    }
+
+    private fun renderLogs() {
+        binding.logsListContainer.removeAllViews()
+        if (logEntries.isEmpty()) {
+            binding.logsListContainer.addView(emptyStateView(getString(R.string.native_logs_empty)))
+            return
+        }
+        logEntries.forEach { line ->
+            binding.logsListContainer.addView(
+                textView(line, 13f, Typeface.NORMAL, "#162033").apply {
+                    background = roundedCard("#FFFFFF")
+                    setPadding(dp(14), dp(14), dp(14), dp(14))
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        bottomMargin = dp(10)
+                    }
+                },
+            )
+        }
     }
 
     private fun renderDetail() {
@@ -657,6 +719,7 @@ class MainActivity : AppCompatActivity() {
         binding.serverUrlInput.error = null
         preferences.edit().putString(baseUrlPrefKey, parsed.toString()).apply()
         currentBaseUri = parsed
+        appendLog("保存服务器地址：${parsed}")
         dismissServerConfigPanel()
         tryBootstrapFromStoredSession()
     }
@@ -678,6 +741,7 @@ class MainActivity : AppCompatActivity() {
         binding.loginPanel.visibility = View.GONE
         binding.errorPanel.visibility = View.GONE
         binding.nativeShellPanel.visibility = View.GONE
+        appendLog("打开服务器配置页")
         hideLoading()
     }
 
@@ -714,6 +778,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showError(message: String) {
+        appendLog("显示错误页：$message")
         binding.errorTitle.text = getString(R.string.error_title)
         binding.errorMessage.text = message
         binding.errorPanel.visibility = View.VISIBLE
@@ -731,14 +796,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun currentServerLabel(): String {
-        val baseUri = currentBaseUri ?: return getString(R.string.server_unknown)
-        return buildString {
-            append(baseUri.host ?: getString(R.string.server_unknown))
-            if (baseUri.port != -1) {
-                append(":")
-                append(baseUri.port)
-            }
-        }
+        return currentBaseUri?.toString()?.removeSuffix("/") ?: getString(R.string.server_unknown)
     }
 
     private fun schedulePolling() {
@@ -766,6 +824,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun performRequest(baseUri: Uri, path: String, method: String, body: String?): ApiResult {
         val endpoint = baseUri.buildUpon().encodedPath(path).build().toString()
+        appendLog("HTTP $method $endpoint")
         return runCatching {
             val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = method
@@ -795,9 +854,24 @@ class MainActivity : AppCompatActivity() {
             val message = root?.optJSONObject("error")?.optString("message").orEmpty()
             val cookies = connection.headerFields["Set-Cookie"].orEmpty()
             connection.disconnect()
+            appendLog("HTTP $method $endpoint -> $code ${message.ifBlank { "OK" }}")
             ApiResult(success = code in 200..299, code = code, data = data, userMessage = message, setCookies = cookies)
         }.getOrElse {
+            appendLog("HTTP $method $endpoint -> NETWORK_ERROR ${it.message.orEmpty()}")
             ApiResult(success = false, code = -1, data = null, userMessage = getString(R.string.login_connection_failed), setCookies = emptyList())
+        }
+    }
+
+    private fun appendLog(message: String) {
+        val line = "${LocalTime.now().format(logTimeFormatter)}  $message"
+        handler.post {
+            logEntries.add(0, line)
+            if (logEntries.size > 200) {
+                logEntries.removeLast()
+            }
+            if (currentScreen == Screen.LOGS && binding.nativeShellPanel.visibility == View.VISIBLE) {
+                renderLogs()
+            }
         }
     }
 
