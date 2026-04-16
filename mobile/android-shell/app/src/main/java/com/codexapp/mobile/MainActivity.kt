@@ -74,6 +74,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedSessionId: String? = null
     private var bootstrapData: JSONObject? = null
     private var selectedDetail: JSONObject? = null
+    private val expandedWorkspacePaths = mutableMapOf<String, Boolean>()
     private var loginBusy = false
     private var logsReturnSurface = OverlaySurface.SHELL
     private var lastErrorMessage = ""
@@ -316,6 +317,7 @@ class MainActivity : AppCompatActivity() {
                     result.success -> {
                         binding.newSessionPromptInput.setText("")
                         binding.newSessionWorkspaceInput.dismissDropDown()
+                        ensureWorkspaceExpanded(cwd)
                         selectedSessionId = result.data?.optJSONObject("session")?.optString("id")
                         appendLog("创建会话成功：${selectedSessionId.orEmpty()}")
                         currentScreen = Screen.DETAIL
@@ -539,7 +541,17 @@ class MainActivity : AppCompatActivity() {
         val model = system?.optString("default_model").orEmpty().ifBlank { "default" }
         val cli = system?.optString("codex_cli_version").orEmpty().ifBlank { "unknown" }
         val activeRuns = system?.optInt("active_runs") ?: 0
-        binding.settingsSystemValue.text = "CLI $cli\nModel $model\nActive runs $activeRuns"
+        binding.settingsSystemValue.text = buildString {
+            append(getString(R.string.native_app_version_label))
+            append(" ")
+            append(BuildConfig.VERSION_NAME)
+            append("\nCLI ")
+            append(cli)
+            append("\nModel ")
+            append(model)
+            append("\nActive runs ")
+            append(activeRuns)
+        }
     }
 
     private fun renderLogs() {
@@ -604,6 +616,7 @@ class MainActivity : AppCompatActivity() {
                 bottomMargin = dp(12)
             }
             setOnClickListener {
+                ensureWorkspaceExpanded(session.optString("cwd"))
                 selectedSessionId = session.optString("id")
                 currentScreen = Screen.DETAIL
                 refreshSelectedSessionDetail()
@@ -675,20 +688,44 @@ class MainActivity : AppCompatActivity() {
         val workspace = group.workspace
         val path = workspace.optString("path")
         val title = workspace.optString("name").ifBlank { path.substringAfterLast('/').ifBlank { path } }
-        container.addView(textView(title, 18f, Typeface.BOLD, "#162033"))
-        container.addView(textView(path, 13f, Typeface.NORMAL, "#60708E").apply {
+        val expanded = isWorkspaceExpanded(group)
+
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val copy = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        copy.addView(textView(title, 18f, Typeface.BOLD, "#162033"))
+        copy.addView(textView(path, 13f, Typeface.NORMAL, "#60708E").apply {
             setPadding(0, dp(6), 0, 0)
         })
-        container.addView(textView(getString(R.string.native_project_group_count, group.sessions.size, group.totalSessions), 13f, Typeface.NORMAL, "#44618E").apply {
+        copy.addView(textView(getString(R.string.native_project_group_count, group.sessions.size, group.totalSessions), 13f, Typeface.NORMAL, "#44618E").apply {
             setPadding(0, dp(8), 0, 0)
         })
-        container.setOnClickListener {
-            binding.newSessionWorkspaceInput.setText(path, false)
-            binding.newSessionWorkspaceInput.setSelection(binding.newSessionWorkspaceInput.text?.length ?: 0)
-        }
+        header.addView(copy)
+        header.addView(actionButton(getString(if (expanded) R.string.native_project_collapse else R.string.native_project_expand)) {
+            toggleWorkspaceExpanded(path)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(10)
+            }
+        })
+        header.addView(actionButton(getString(R.string.native_project_new)) {
+            prepareNewSessionForWorkspace(path)
+        }.apply {
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginStart = dp(10)
+            }
+        })
+        container.addView(header)
 
-        group.sessions.forEach { session ->
-            container.addView(sessionCard(session))
+        if (expanded) {
+            group.sessions.forEach { session ->
+                container.addView(sessionCard(session))
+            }
         }
         return container
     }
@@ -908,6 +945,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun displaySessionTitle(session: JSONObject): String {
         return session.optString("title").ifBlank { session.optString("id") }
+    }
+
+    private fun prepareNewSessionForWorkspace(workspacePath: String) {
+        ensureWorkspaceExpanded(workspacePath)
+        binding.newSessionWorkspaceInput.setText(workspacePath, false)
+        binding.newSessionWorkspaceInput.setSelection(binding.newSessionWorkspaceInput.text?.length ?: 0)
+        currentScreen = Screen.INBOX
+        showScreen(Screen.INBOX)
+        binding.inboxScreen.post {
+            binding.inboxScreen.fullScroll(View.FOCUS_UP)
+            binding.newSessionPromptInput.requestFocus()
+        }
     }
 
     private fun saveServerAndContinue() {
@@ -1265,6 +1314,35 @@ class MainActivity : AppCompatActivity() {
                 WorkspaceGroup(workspace = workspace, sessions = groupedSessions, totalSessions = totalSessions)
             }
         }
+    }
+
+    private fun isWorkspaceExpanded(group: WorkspaceGroup): Boolean {
+        val path = group.workspace.optString("path")
+        val stored = expandedWorkspacePaths[path]
+        if (stored != null) {
+            return stored
+        }
+        val selectedSessionCwd = normalizePath(selectedSession()?.optString("cwd").orEmpty())
+        return selectedSessionCwd == normalizePath(path) ||
+            selectedSessionCwd.startsWith("${normalizePath(path)}/") ||
+            currentNewSessionPath().startsWith(normalizePath(path))
+    }
+
+    private fun toggleWorkspaceExpanded(workspacePath: String) {
+        expandedWorkspacePaths[workspacePath] = !isWorkspaceExpanded(
+            WorkspaceGroup(JSONObject().put("path", workspacePath), emptyList(), 0),
+        )
+        renderInbox()
+    }
+
+    private fun ensureWorkspaceExpanded(cwd: String) {
+        workspaceForCwd(cwd)?.optString("path")?.takeIf { it.isNotBlank() }?.let {
+            expandedWorkspacePaths[it] = true
+        }
+    }
+
+    private fun currentNewSessionPath(): String {
+        return normalizePath(binding.newSessionWorkspaceInput.text?.toString().orEmpty())
     }
 
     private fun workspaceForCwd(cwd: String): JSONObject? {

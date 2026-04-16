@@ -41,6 +41,9 @@
     <string name="native_new_session_prompt_hint">输入第一条消息，创建新的会话</string>
     <string name="native_create_session">创建并运行</string>
     <string name="native_sessions_section_title">会话列表</string>
+    <string name="native_project_expand">展开</string>
+    <string name="native_project_collapse">收起</string>
+    <string name="native_project_new">在此新建</string>
     <string name="native_back">返回</string>
     <string name="native_open_session">进入会话</string>
     <string name="native_rename">改名</string>
@@ -51,6 +54,7 @@
     <string name="native_resume_prompt_hint">继续输入下一条消息</string>
     <string name="native_send_prompt">发送到当前会话</string>
     <string name="native_settings_title">客户端设置</string>
+    <string name="native_app_version_label">客户端版本</string>
     <string name="native_system_summary_label">系统状态</string>
     <string name="native_logout">退出登录</string>
     <string name="native_logs_title">调试日志</string>
